@@ -1,0 +1,6 @@
+{
+  "name": "Aura Bank - Institutional & Commercial Banking",
+  "description": "Precision-engineered institutional and commercial digital banking platform featuring multi-account USD management, instant deposits, compliance-checked withdrawals, wire transfers, virtual cards, and cash flow analytics.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
