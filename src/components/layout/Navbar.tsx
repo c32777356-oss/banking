@@ -26,23 +26,23 @@ export const Navbar: React.FC<NavbarProps> = ({ currentTab, onSelectTab, onOpenD
 
   return (
     <header className="sticky top-0 z-40 w-full border-b border-slate-200 bg-white/95 backdrop-blur-md shadow-xs">
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between gap-8">
+      <div className="max-w-7xl mx-auto px-3 sm:px-6 lg:px-8 h-14 sm:h-16 flex items-center justify-between gap-3 sm:gap-8">
         {/* Zone 1: Single text element wordmark with banking emblem */}
-        <div className="flex items-center gap-3 shrink-0">
-          <div className="w-8 h-8 rounded-lg bg-blue-600 flex items-center justify-center shadow-sm shadow-blue-600/20 text-white font-bold">
+        <div className="flex items-center gap-2.5 sm:gap-3 shrink-0">
+          <div className="w-8 h-8 rounded-lg bg-blue-600 flex items-center justify-center shadow-sm shadow-blue-600/20 text-white font-bold shrink-0">
             <Building2 className="w-4 h-4 text-white" />
           </div>
           <div className="flex flex-col">
-            <span className="text-base font-bold tracking-tight text-slate-900 whitespace-nowrap">
+            <span className="text-sm sm:text-base font-bold tracking-tight text-slate-900 whitespace-nowrap">
               Aura Commercial Bank
             </span>
-            <span className="text-[10px] text-slate-500 tracking-wider uppercase font-medium">
-              Member FDIC · Equal Housing Lender
+            <span className="text-[9px] sm:text-[10px] text-slate-500 tracking-wider uppercase font-medium">
+              Member FDIC
             </span>
           </div>
         </div>
 
-        {/* Zone 2: 4-6 concise single-line nav links */}
+        {/* Zone 2: Desktop 4-6 concise single-line nav links */}
         <nav className="hidden lg:flex items-center gap-1">
           {navItems.map((item) => {
             const isActive = currentTab === item.id;
@@ -63,22 +63,24 @@ export const Navbar: React.FC<NavbarProps> = ({ currentTab, onSelectTab, onOpenD
         </nav>
 
         {/* Zone 3: Primary action + Profile lockup */}
-        <div className="flex items-center gap-3 shrink-0">
+        <div className="flex items-center gap-2 sm:gap-3 shrink-0">
           <button
             onClick={onOpenDeposit}
-            className="flex items-center gap-2 px-3.5 py-1.5 text-xs font-semibold text-white bg-blue-600 hover:bg-blue-700 active:scale-[0.98] transition-all rounded-md shadow-sm shadow-blue-600/20 whitespace-nowrap shrink-0"
+            className="flex items-center gap-1.5 sm:gap-2 px-2.5 sm:px-3.5 py-1.5 min-h-[36px] sm:min-h-[38px] text-xs font-semibold text-white bg-blue-600 hover:bg-blue-700 active:scale-[0.98] transition-all rounded-lg shadow-sm shadow-blue-600/20 whitespace-nowrap shrink-0"
           >
             <ArrowDownLeft className="w-3.5 h-3.5 stroke-[2.5]" />
-            <span>Deposit Funds</span>
+            <span className="hidden xs:inline">Deposit</span>
+            <span className="xs:hidden">Deposit</span>
           </button>
 
           {/* User Profile Menu */}
           <div className="relative">
             <button
               onClick={() => setIsProfileOpen(!isProfileOpen)}
-              className="flex items-center gap-2.5 p-1.5 rounded-lg border border-slate-200 bg-slate-50/80 hover:bg-slate-100 transition-colors text-left"
+              className="flex items-center gap-2 p-1 sm:p-1.5 rounded-lg border border-slate-200 bg-slate-50/80 hover:bg-slate-100 transition-colors text-left min-h-[36px] min-w-[36px] justify-center"
+              aria-label="User profile menu"
             >
-              <div className="w-7 h-7 rounded bg-blue-100 text-blue-700 border border-blue-200 text-xs font-semibold flex items-center justify-center font-mono">
+              <div className="w-7 h-7 rounded-md bg-blue-100 text-blue-700 border border-blue-200 text-xs font-semibold flex items-center justify-center font-mono">
                 {user?.avatarInitials || 'AC'}
               </div>
               <div className="hidden sm:flex flex-col pr-1">
@@ -98,9 +100,9 @@ export const Navbar: React.FC<NavbarProps> = ({ currentTab, onSelectTab, onOpenD
                   className="fixed inset-0 z-40"
                   onClick={() => setIsProfileOpen(false)}
                 />
-                <div className="absolute right-0 mt-2 w-72 rounded-xl border border-slate-200 bg-white shadow-xl z-50 p-2 text-xs">
+                <div className="absolute right-0 mt-2 w-72 rounded-2xl border border-slate-200 bg-white shadow-2xl z-50 p-2.5 text-xs max-sm:fixed max-sm:right-4 max-sm:left-4 max-sm:w-auto max-sm:top-14">
                   <div className="px-3 py-2 border-b border-slate-100 mb-2">
-                    <p className="font-semibold text-slate-900">{user?.name}</p>
+                    <p className="font-bold text-slate-900 text-sm">{user?.name}</p>
                     <p className="text-[11px] text-slate-500 truncate font-mono">{user?.email}</p>
                     <div className="mt-1 flex items-center gap-1.5 text-[10px] text-blue-700 font-medium">
                       <Shield className="w-3 h-3 text-blue-600" />
@@ -118,14 +120,14 @@ export const Navbar: React.FC<NavbarProps> = ({ currentTab, onSelectTab, onOpenD
                         loginAsPersona(idx);
                         setIsProfileOpen(false);
                       }}
-                      className="w-full text-left px-3 py-1.5 rounded text-slate-700 hover:bg-blue-50 hover:text-blue-900 flex items-center justify-between transition-colors"
+                      className="w-full text-left px-3 py-2 rounded-lg text-slate-700 hover:bg-blue-50 hover:text-blue-900 flex items-center justify-between transition-colors min-h-[40px]"
                     >
                       <div className="truncate">
-                        <p className="font-medium text-slate-900">{p.user.name}</p>
+                        <p className="font-semibold text-slate-900 text-xs">{p.user.name}</p>
                         <p className="text-[10px] text-slate-500 truncate">{p.user.company}</p>
                       </div>
                       {user?.id === p.user.id && (
-                        <span className="text-[10px] text-blue-600 font-mono font-medium">Active</span>
+                        <span className="text-[10px] text-blue-600 font-mono font-bold bg-blue-50 px-1.5 py-0.5 rounded border border-blue-200">Active</span>
                       )}
                     </button>
                   ))}
@@ -137,9 +139,9 @@ export const Navbar: React.FC<NavbarProps> = ({ currentTab, onSelectTab, onOpenD
                       resetToDemoData();
                       setIsProfileOpen(false);
                     }}
-                    className="w-full text-left px-3 py-2 rounded text-slate-600 hover:bg-slate-100 hover:text-slate-900 flex items-center gap-2 transition-colors"
+                    className="w-full text-left px-3 py-2 rounded-lg text-slate-600 hover:bg-slate-100 hover:text-slate-900 flex items-center gap-2 transition-colors min-h-[40px]"
                   >
-                    <RefreshCw className="w-3.5 h-3.5 text-slate-400" />
+                    <RefreshCw className="w-4 h-4 text-slate-400" />
                     <span>Restore Initial Ledger State</span>
                   </button>
 
@@ -148,9 +150,9 @@ export const Navbar: React.FC<NavbarProps> = ({ currentTab, onSelectTab, onOpenD
                       logout();
                       setIsProfileOpen(false);
                     }}
-                    className="w-full text-left px-3 py-2 rounded text-red-600 hover:bg-red-50 flex items-center gap-2 transition-colors"
+                    className="w-full text-left px-3 py-2 rounded-lg text-red-600 hover:bg-red-50 flex items-center gap-2 transition-colors min-h-[40px] font-medium"
                   >
-                    <LogOut className="w-3.5 h-3.5 text-red-500" />
+                    <LogOut className="w-4 h-4 text-red-500" />
                     <span>Sign Out of Portal</span>
                   </button>
                 </div>
@@ -158,23 +160,6 @@ export const Navbar: React.FC<NavbarProps> = ({ currentTab, onSelectTab, onOpenD
             )}
           </div>
         </div>
-      </div>
-
-      {/* Mobile Nav Bar */}
-      <div className="lg:hidden flex overflow-x-auto border-t border-slate-200 px-4 py-2 gap-2 scrollbar-none bg-slate-50">
-        {navItems.map((item) => (
-          <button
-            key={item.id}
-            onClick={() => onSelectTab(item.id)}
-            className={`px-3 py-1 text-xs font-medium rounded whitespace-nowrap ${
-              currentTab === item.id
-                ? 'bg-blue-600 text-white font-semibold'
-                : 'text-slate-600 hover:text-slate-900'
-            }`}
-          >
-            {item.label}
-          </button>
-        ))}
       </div>
     </header>
   );

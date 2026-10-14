@@ -176,9 +176,10 @@ export const TransfersView: React.FC<TransfersViewProps> = ({ onOpenTransfer }) 
 
       {/* Add Beneficiary Modal */}
       {isAddModalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+        <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-0 sm:p-4">
           <div className="fixed inset-0 bg-black/60 backdrop-blur-xs" onClick={() => setIsAddModalOpen(false)} />
-          <div className="relative w-full max-w-md rounded-2xl border border-slate-200 bg-white shadow-2xl p-6 text-slate-900 z-10">
+          <div className="relative w-full max-w-md rounded-t-3xl sm:rounded-2xl border border-slate-200 bg-white shadow-2xl p-6 text-slate-900 z-10 max-h-[92vh] overflow-y-auto">
+            <div className="w-10 h-1 bg-slate-300 rounded-full mx-auto -mt-2 mb-3 sm:hidden" />
             <h3 className="text-base font-bold text-slate-900 mb-1">Add Commercial Wire Beneficiary</h3>
             <p className="text-xs text-slate-500 mb-4">Register account for instant domestic transfers</p>
 

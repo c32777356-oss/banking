@@ -232,14 +232,14 @@ export const CardsView: React.FC = () => {
                 <div className="flex items-center gap-2 pt-1">
                   <button
                     onClick={() => toggleCardFreeze(card.id)}
-                    className={`flex-1 py-1.5 text-xs font-semibold rounded-lg border transition-colors flex items-center justify-center gap-1.5 ${
+                    className={`flex-1 py-2.5 px-3 text-xs font-semibold rounded-xl border transition-colors flex items-center justify-center gap-1.5 min-h-[44px] ${
                       isFrozen
                         ? 'border-blue-300 bg-blue-50 text-blue-700 hover:bg-blue-100'
                         : 'border-slate-300 bg-white text-slate-700 hover:bg-slate-50'
                     }`}
                   >
-                    {isFrozen ? <Unlock className="w-3.5 h-3.5" /> : <Snowflake className="w-3.5 h-3.5" />}
-                    <span>{isFrozen ? 'Unfreeze Card' : 'Freeze Card'}</span>
+                    {isFrozen ? <Unlock className="w-4 h-4" /> : <Snowflake className="w-4 h-4" />}
+                    <span>{isFrozen ? 'Unfreeze' : 'Freeze'}</span>
                   </button>
 
                   <button
@@ -247,18 +247,18 @@ export const CardsView: React.FC = () => {
                       setEditingCard(card);
                       setEditLimitValue(card.monthlyLimit.toString());
                     }}
-                    className="p-1.5 rounded-lg border border-slate-300 bg-white text-slate-700 hover:text-slate-900 hover:bg-slate-50 transition-colors shadow-2xs"
+                    className="p-2.5 rounded-xl border border-slate-300 bg-white text-slate-700 hover:text-slate-900 hover:bg-slate-50 transition-colors shadow-2xs min-h-[44px] min-w-[44px] flex items-center justify-center"
                     title="Adjust Limit"
                   >
-                    <Sliders className="w-3.5 h-3.5" />
+                    <Sliders className="w-4 h-4" />
                   </button>
 
                   <button
                     onClick={() => copyPan(card.fullPan, card.id)}
-                    className="p-1.5 rounded-lg border border-slate-300 bg-white text-slate-700 hover:text-slate-900 hover:bg-slate-50 transition-colors shadow-2xs"
+                    className="p-2.5 rounded-xl border border-slate-300 bg-white text-slate-700 hover:text-slate-900 hover:bg-slate-50 transition-colors shadow-2xs min-h-[44px] min-w-[44px] flex items-center justify-center"
                     title="Copy Card Number"
                   >
-                    {copiedPan === card.id ? <Check className="w-3.5 h-3.5 text-blue-600" /> : <CreditCard className="w-3.5 h-3.5" />}
+                    {copiedPan === card.id ? <Check className="w-4 h-4 text-blue-600" /> : <CreditCard className="w-4 h-4" />}
                   </button>
                 </div>
               </div>
@@ -269,9 +269,10 @@ export const CardsView: React.FC = () => {
 
       {/* Issue Card Modal */}
       {isIssueModalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+        <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-0 sm:p-4">
           <div className="fixed inset-0 bg-black/60 backdrop-blur-xs" onClick={() => setIsIssueModalOpen(false)} />
-          <div className="relative w-full max-w-md rounded-2xl border border-slate-200 bg-white shadow-2xl p-6 text-slate-900 z-10">
+          <div className="relative w-full max-w-md rounded-t-3xl sm:rounded-2xl border border-slate-200 bg-white shadow-2xl p-6 text-slate-900 z-10 max-h-[92vh] overflow-y-auto">
+            <div className="w-10 h-1 bg-slate-300 rounded-full mx-auto -mt-2 mb-3 sm:hidden" />
             <h3 className="text-base font-bold text-slate-900 mb-1">Issue New Virtual Debit Card</h3>
             <p className="text-xs text-slate-500 mb-4">
               Instantly provisions a zero-fee corporate card on the payment network
@@ -366,9 +367,10 @@ export const CardsView: React.FC = () => {
 
       {/* Adjust Limit Modal */}
       {editingCard && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+        <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-0 sm:p-4">
           <div className="fixed inset-0 bg-black/60 backdrop-blur-xs" onClick={() => setEditingCard(null)} />
-          <div className="relative w-full max-w-sm rounded-2xl border border-slate-200 bg-white shadow-2xl p-6 text-slate-900 z-10">
+          <div className="relative w-full max-w-sm rounded-t-3xl sm:rounded-2xl border border-slate-200 bg-white shadow-2xl p-6 text-slate-900 z-10">
+            <div className="w-10 h-1 bg-slate-300 rounded-full mx-auto -mt-2 mb-3 sm:hidden" />
             <h3 className="text-sm font-bold text-slate-900 mb-1">Adjust Monthly Spending Cap</h3>
             <p className="text-xs text-slate-500 mb-4">{editingCard.cardName} (•••• {editingCard.last4})</p>
 
