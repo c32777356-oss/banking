@@ -1,34 +1,34 @@
 import React, { useState } from 'react';
-import { ArrowDownLeft, Building2, ChevronDown, LogOut, RefreshCw, Shield, User, Wallet } from 'lucide-react';
+import { ArrowDownLeft, Building2, ChevronDown, LogOut, RefreshCw, Send, Shield, User } from 'lucide-react';
 import { useBanking } from '../../context/BankingContext';
 import { DEMO_PERSONAS } from '../../data/mockData';
 
-export type NavTab = 'overview' | 'accounts' | 'transfers' | 'cards' | 'analytics' | 'statements';
+export type NavTab = 'dashboard' | 'profile';
 
 interface NavbarProps {
   currentTab: NavTab;
   onSelectTab: (tab: NavTab) => void;
   onOpenDeposit: () => void;
+  onOpenTransfer: () => void;
 }
 
-export const Navbar: React.FC<NavbarProps> = ({ currentTab, onSelectTab, onOpenDeposit }) => {
+export const Navbar: React.FC<NavbarProps> = ({
+  currentTab,
+  onSelectTab,
+  onOpenDeposit,
+  onOpenTransfer,
+}) => {
   const { user, logout, loginAsPersona, resetToDemoData } = useBanking();
   const [isProfileOpen, setIsProfileOpen] = useState(false);
-
-  const navItems: { id: NavTab; label: string }[] = [
-    { id: 'overview', label: 'Overview' },
-    { id: 'accounts', label: 'Accounts' },
-    { id: 'transfers', label: 'Transfers & Wires' },
-    { id: 'cards', label: 'Virtual Cards' },
-    { id: 'analytics', label: 'Analytics' },
-    { id: 'statements', label: 'Statements' },
-  ];
 
   return (
     <header className="sticky top-0 z-40 w-full border-b border-slate-200 bg-white/95 backdrop-blur-md shadow-xs">
       <div className="max-w-7xl mx-auto px-3 sm:px-6 lg:px-8 h-14 sm:h-16 flex items-center justify-between gap-3 sm:gap-8">
         {/* Zone 1: Single text element wordmark with banking emblem */}
-        <div className="flex items-center gap-2.5 sm:gap-3 shrink-0">
+        <div
+          onClick={() => onSelectTab('dashboard')}
+          className="flex items-center gap-2.5 sm:gap-3 shrink-0 cursor-pointer"
+        >
           <div className="w-8 h-8 rounded-lg bg-blue-600 flex items-center justify-center shadow-sm shadow-blue-600/20 text-white font-bold shrink-0">
             <Building2 className="w-4 h-4 text-white" />
           </div>
@@ -42,35 +42,56 @@ export const Navbar: React.FC<NavbarProps> = ({ currentTab, onSelectTab, onOpenD
           </div>
         </div>
 
-        {/* Zone 2: Desktop 4-6 concise single-line nav links */}
-        <nav className="hidden lg:flex items-center gap-1">
-          {navItems.map((item) => {
-            const isActive = currentTab === item.id;
-            return (
-              <button
-                key={item.id}
-                onClick={() => onSelectTab(item.id)}
-                className={`px-3 py-1.5 text-xs font-medium rounded-md transition-all whitespace-nowrap shrink-0 ${
-                  isActive
-                    ? 'bg-blue-50 text-blue-700 font-semibold border border-blue-200/80 shadow-xs'
-                    : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100/80'
-                }`}
-              >
-                {item.label}
-              </button>
-            );
-          })}
+        {/* Zone 2: Navigation links */}
+        <nav className="hidden md:flex items-center gap-1.5">
+          <button
+            onClick={() => onSelectTab('dashboard')}
+            className={`px-3.5 py-1.5 text-xs font-semibold rounded-lg transition-all whitespace-nowrap ${
+              currentTab === 'dashboard'
+                ? 'bg-blue-50 text-blue-700 border border-blue-200/80 shadow-xs'
+                : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100/80'
+            }`}
+          >
+            Balance & History
+          </button>
+
+          <button
+            onClick={onOpenDeposit}
+            className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-slate-600 hover:text-slate-900 hover:bg-slate-100/80 rounded-lg transition-colors whitespace-nowrap"
+          >
+            <ArrowDownLeft className="w-3.5 h-3.5 text-blue-600" />
+            <span>Deposit</span>
+          </button>
+
+          <button
+            onClick={onOpenTransfer}
+            className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-slate-600 hover:text-slate-900 hover:bg-slate-100/80 rounded-lg transition-colors whitespace-nowrap"
+          >
+            <Send className="w-3.5 h-3.5 text-blue-600" />
+            <span>Transfer</span>
+          </button>
+
+          <button
+            onClick={() => onSelectTab('profile')}
+            className={`flex items-center gap-1.5 px-3.5 py-1.5 text-xs font-semibold rounded-lg transition-all whitespace-nowrap ${
+              currentTab === 'profile'
+                ? 'bg-blue-50 text-blue-700 border border-blue-200/80 shadow-xs'
+                : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100/80'
+            }`}
+          >
+            <User className="w-3.5 h-3.5" />
+            <span>Account Owner</span>
+          </button>
         </nav>
 
         {/* Zone 3: Primary action + Profile lockup */}
         <div className="flex items-center gap-2 sm:gap-3 shrink-0">
           <button
             onClick={onOpenDeposit}
-            className="flex items-center gap-1.5 sm:gap-2 px-2.5 sm:px-3.5 py-1.5 min-h-[36px] sm:min-h-[38px] text-xs font-semibold text-white bg-blue-600 hover:bg-blue-700 active:scale-[0.98] transition-all rounded-lg shadow-sm shadow-blue-600/20 whitespace-nowrap shrink-0"
+            className="flex items-center gap-1.5 sm:gap-2 px-3 sm:px-3.5 py-1.5 min-h-[36px] sm:min-h-[38px] text-xs font-semibold text-white bg-blue-600 hover:bg-blue-700 active:scale-[0.98] transition-all rounded-lg shadow-sm shadow-blue-600/20 whitespace-nowrap shrink-0"
           >
             <ArrowDownLeft className="w-3.5 h-3.5 stroke-[2.5]" />
-            <span className="hidden xs:inline">Deposit</span>
-            <span className="xs:hidden">Deposit</span>
+            <span>Deposit</span>
           </button>
 
           {/* User Profile Menu */}
@@ -81,14 +102,14 @@ export const Navbar: React.FC<NavbarProps> = ({ currentTab, onSelectTab, onOpenD
               aria-label="User profile menu"
             >
               <div className="w-7 h-7 rounded-md bg-blue-100 text-blue-700 border border-blue-200 text-xs font-semibold flex items-center justify-center font-mono">
-                {user?.avatarInitials || 'AC'}
+                {user?.avatarInitials || 'AV'}
               </div>
               <div className="hidden sm:flex flex-col pr-1">
                 <span className="text-xs font-semibold text-slate-900 leading-tight max-w-[120px] truncate">
                   {user?.name || 'Authorized User'}
                 </span>
                 <span className="text-[10px] text-slate-500 leading-tight">
-                  {user?.tier || 'Commercial Client'}
+                  Account Owner
                 </span>
               </div>
               <ChevronDown className="w-3.5 h-3.5 text-slate-400 hidden sm:block" />
@@ -110,7 +131,18 @@ export const Navbar: React.FC<NavbarProps> = ({ currentTab, onSelectTab, onOpenD
                     </div>
                   </div>
 
-                  <div className="px-2 py-1 text-[11px] font-semibold text-slate-400 uppercase tracking-wider">
+                  <button
+                    onClick={() => {
+                      onSelectTab('profile');
+                      setIsProfileOpen(false);
+                    }}
+                    className="w-full text-left px-3 py-2 rounded-lg text-slate-700 hover:bg-blue-50 hover:text-blue-900 flex items-center gap-2 transition-colors min-h-[38px] font-semibold"
+                  >
+                    <User className="w-4 h-4 text-blue-600" />
+                    <span>View Account Owner Profile</span>
+                  </button>
+
+                  <div className="px-2 py-1.5 text-[11px] font-semibold text-slate-400 uppercase tracking-wider mt-1">
                     Switch Demo Persona
                   </div>
                   {DEMO_PERSONAS.map((p, idx) => (
@@ -120,7 +152,7 @@ export const Navbar: React.FC<NavbarProps> = ({ currentTab, onSelectTab, onOpenD
                         loginAsPersona(idx);
                         setIsProfileOpen(false);
                       }}
-                      className="w-full text-left px-3 py-2 rounded-lg text-slate-700 hover:bg-blue-50 hover:text-blue-900 flex items-center justify-between transition-colors min-h-[40px]"
+                      className="w-full text-left px-3 py-2 rounded-lg text-slate-700 hover:bg-blue-50 hover:text-blue-900 flex items-center justify-between transition-colors min-h-[38px]"
                     >
                       <div className="truncate">
                         <p className="font-semibold text-slate-900 text-xs">{p.user.name}</p>
@@ -139,7 +171,7 @@ export const Navbar: React.FC<NavbarProps> = ({ currentTab, onSelectTab, onOpenD
                       resetToDemoData();
                       setIsProfileOpen(false);
                     }}
-                    className="w-full text-left px-3 py-2 rounded-lg text-slate-600 hover:bg-slate-100 hover:text-slate-900 flex items-center gap-2 transition-colors min-h-[40px]"
+                    className="w-full text-left px-3 py-2 rounded-lg text-slate-600 hover:bg-slate-100 hover:text-slate-900 flex items-center gap-2 transition-colors min-h-[38px]"
                   >
                     <RefreshCw className="w-4 h-4 text-slate-400" />
                     <span>Restore Initial Ledger State</span>
@@ -150,7 +182,7 @@ export const Navbar: React.FC<NavbarProps> = ({ currentTab, onSelectTab, onOpenD
                       logout();
                       setIsProfileOpen(false);
                     }}
-                    className="w-full text-left px-3 py-2 rounded-lg text-red-600 hover:bg-red-50 flex items-center gap-2 transition-colors min-h-[40px] font-medium"
+                    className="w-full text-left px-3 py-2 rounded-lg text-red-600 hover:bg-red-50 flex items-center gap-2 transition-colors min-h-[38px] font-semibold"
                   >
                     <LogOut className="w-4 h-4 text-red-500" />
                     <span>Sign Out of Portal</span>

@@ -1,55 +1,93 @@
 import React from 'react';
-import { ArrowLeftRight, Building2, CreditCard, FileText, Home, PieChart } from 'lucide-react';
+import { ArrowDownLeft, Send, Home, User } from 'lucide-react';
 import { NavTab } from './Navbar';
 
 interface BottomNavProps {
   currentTab: NavTab;
   onSelectTab: (tab: NavTab) => void;
   onOpenDeposit: () => void;
+  onOpenTransfer: () => void;
 }
 
-export const BottomNav: React.FC<BottomNavProps> = ({ currentTab, onSelectTab }) => {
-  const tabs: { id: NavTab; label: string; icon: React.FC<{ className?: string }> }[] = [
-    { id: 'overview', label: 'Home', icon: Home },
-    { id: 'accounts', label: 'Accounts', icon: Building2 },
-    { id: 'transfers', label: 'Transfers', icon: ArrowLeftRight },
-    { id: 'cards', label: 'Cards', icon: CreditCard },
-    { id: 'analytics', label: 'Analytics', icon: PieChart },
-    { id: 'statements', label: 'Statements', icon: FileText },
-  ];
-
+export const BottomNav: React.FC<BottomNavProps> = ({
+  currentTab,
+  onSelectTab,
+  onOpenDeposit,
+  onOpenTransfer,
+}) => {
   return (
     <nav
       aria-label="Mobile Navigation"
-      className="lg:hidden fixed bottom-0 left-0 right-0 z-40 bg-white/95 backdrop-blur-md border-t border-slate-200/90 shadow-[0_-4px_20px_rgba(0,0,0,0.04)] px-2 pb-[env(safe-area-inset-bottom,8px)] pt-1"
+      className="md:hidden fixed bottom-0 left-0 right-0 z-40 bg-white/95 backdrop-blur-md border-t border-slate-200/90 shadow-[0_-4px_20px_rgba(0,0,0,0.06)] px-3 pb-[env(safe-area-inset-bottom,8px)] pt-1"
     >
-      <div className="grid grid-cols-6 items-center max-w-md mx-auto">
-        {tabs.map((tab) => {
-          const Icon = tab.icon;
-          const isActive = currentTab === tab.id;
-          return (
-            <button
-              key={tab.id}
-              onClick={() => onSelectTab(tab.id)}
-              className={`flex flex-col items-center justify-center min-h-[48px] py-1 px-1 rounded-xl transition-all select-none ${
-                isActive
-                  ? 'text-blue-700 font-semibold'
-                  : 'text-slate-500 hover:text-slate-900 active:scale-95'
-              }`}
-            >
-              <div
-                className={`p-1 rounded-lg transition-colors ${
-                  isActive ? 'bg-blue-50 text-blue-700' : ''
-                }`}
-              >
-                <Icon className={`w-5 h-5 ${isActive ? 'stroke-[2.5]' : 'stroke-[1.8]'}`} />
-              </div>
-              <span className={`text-[10px] tracking-tight mt-0.5 truncate max-w-full ${isActive ? 'font-bold text-blue-700' : 'font-medium'}`}>
-                {tab.label}
-              </span>
-            </button>
-          );
-        })}
+      <div className="grid grid-cols-4 items-center max-w-md mx-auto">
+        {/* Dashboard / Balance Tab */}
+        <button
+          onClick={() => onSelectTab('dashboard')}
+          className={`flex flex-col items-center justify-center min-h-[50px] py-1 px-1 rounded-xl transition-all select-none ${
+            currentTab === 'dashboard'
+              ? 'text-blue-700 font-semibold'
+              : 'text-slate-500 hover:text-slate-900 active:scale-95'
+          }`}
+        >
+          <div
+            className={`p-1.5 rounded-lg transition-colors ${
+              currentTab === 'dashboard' ? 'bg-blue-50 text-blue-700' : ''
+            }`}
+          >
+            <Home className={`w-5 h-5 ${currentTab === 'dashboard' ? 'stroke-[2.5]' : 'stroke-[1.8]'}`} />
+          </div>
+          <span className={`text-[10px] tracking-tight mt-0.5 ${currentTab === 'dashboard' ? 'font-bold text-blue-700' : 'font-medium'}`}>
+            Balance
+          </span>
+        </button>
+
+        {/* Deposit Action */}
+        <button
+          onClick={onOpenDeposit}
+          className="flex flex-col items-center justify-center min-h-[50px] py-1 px-1 rounded-xl text-slate-600 hover:text-blue-700 active:scale-95 transition-all select-none"
+        >
+          <div className="p-1.5 rounded-lg bg-blue-50/80 text-blue-600">
+            <ArrowDownLeft className="w-5 h-5 stroke-[2.2]" />
+          </div>
+          <span className="text-[10px] font-medium tracking-tight mt-0.5 text-slate-600">
+            Deposit
+          </span>
+        </button>
+
+        {/* Transfer Action */}
+        <button
+          onClick={onOpenTransfer}
+          className="flex flex-col items-center justify-center min-h-[50px] py-1 px-1 rounded-xl text-slate-600 hover:text-blue-700 active:scale-95 transition-all select-none"
+        >
+          <div className="p-1.5 rounded-lg bg-blue-50/80 text-blue-600">
+            <Send className="w-5 h-5 stroke-[2]" />
+          </div>
+          <span className="text-[10px] font-medium tracking-tight mt-0.5 text-slate-600">
+            Transfer
+          </span>
+        </button>
+
+        {/* Profile Tab */}
+        <button
+          onClick={() => onSelectTab('profile')}
+          className={`flex flex-col items-center justify-center min-h-[50px] py-1 px-1 rounded-xl transition-all select-none ${
+            currentTab === 'profile'
+              ? 'text-blue-700 font-semibold'
+              : 'text-slate-500 hover:text-slate-900 active:scale-95'
+          }`}
+        >
+          <div
+            className={`p-1.5 rounded-lg transition-colors ${
+              currentTab === 'profile' ? 'bg-blue-50 text-blue-700' : ''
+            }`}
+          >
+            <User className={`w-5 h-5 ${currentTab === 'profile' ? 'stroke-[2.5]' : 'stroke-[1.8]'}`} />
+          </div>
+          <span className={`text-[10px] tracking-tight mt-0.5 ${currentTab === 'profile' ? 'font-bold text-blue-700' : 'font-medium'}`}>
+            Profile
+          </span>
+        </button>
       </div>
     </nav>
   );
