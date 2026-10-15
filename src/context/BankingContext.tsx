@@ -113,61 +113,9 @@ export const BankingProvider: React.FC<{ children: React.ReactNode }> = ({ child
     }
   });
 
-  const [registeredUsers, setRegisteredUsers] = useState<UserSession[]>(() => {
-    try {
-      const deletedIdsJson = localStorage.getItem(STORAGE_KEYS.DELETED_USERS);
-      const deletedUserIds: string[] = deletedIdsJson ? JSON.parse(deletedIdsJson) : [];
-      const deletedUserSet = new Set(deletedUserIds);
-
-      const saved = localStorage.getItem(STORAGE_KEYS.USERS_LIST);
-      const demoUsers = DEMO_PERSONAS.map((p) => p.user);
-      let usersToLoad = demoUsers;
-      if (saved) {
-        const parsed: UserSession[] = JSON.parse(saved);
-        const userMap = new Map<string, UserSession>();
-        [...demoUsers, ...parsed].forEach((u) => userMap.set(u.id, u));
-        usersToLoad = Array.from(userMap.values());
-      }
-      return usersToLoad.filter((u) => !deletedUserSet.has(u.id));
-    } catch {
-      return DEMO_PERSONAS.map((p) => p.user);
-    }
-  });
-
-  const [allAccounts, setAllAccounts] = useState<Account[]>(() => {
-    try {
-      const deletedIdsJson = localStorage.getItem(STORAGE_KEYS.DELETED_USERS);
-      const deletedUserIds: string[] = deletedIdsJson ? JSON.parse(deletedIdsJson) : [];
-      const deletedUserSet = new Set(deletedUserIds);
-
-      const saved = localStorage.getItem(STORAGE_KEYS.ACCOUNTS);
-      const defaultAccounts = DEMO_PERSONAS.flatMap((p) =>
-        p.accounts.map((a) => ({ ...a, userId: a.userId || p.user.id }))
-      );
-      let accountsToLoad: Account[] = defaultAccounts;
-      if (saved) {
-        const parsed: Account[] = JSON.parse(saved);
-        const accountMap = new Map<string, Account>();
-        [...defaultAccounts, ...parsed].forEach((a) => accountMap.set(a.id, a));
-        accountsToLoad = Array.from(accountMap.values()) as Account[];
-      }
-      return accountsToLoad.filter((a) => !a.userId || !deletedUserSet.has(a.userId));
-    } catch {
-      return DEMO_PERSONAS.flatMap((p) =>
-        p.accounts.map((a) => ({ ...a, userId: a.userId || p.user.id }))
-      );
-    }
-  });
-
-  const [allTransactions, setAllTransactions] = useState<Transaction[]>(() => {
-    try {
-      const saved = localStorage.getItem(STORAGE_KEYS.TRANSACTIONS);
-      if (saved) return JSON.parse(saved);
-      return INITIAL_TRANSACTIONS;
-    } catch {
-      return INITIAL_TRANSACTIONS;
-    }
-  });
+  const [registeredUsers, setRegisteredUsers] = useState<UserSession[]>([]);
+  const [allAccounts, setAllAccounts] = useState<Account[]>([]);
+  const [allTransactions, setAllTransactions] = useState<Transaction[]>([]);
 
   const [cards] = useState<VirtualCard[]>(() => {
     try {
@@ -209,54 +157,44 @@ export const BankingProvider: React.FC<{ children: React.ReactNode }> = ({ child
     }
   });
 
-  // Sync state to localStorage
+  // Real-time Firestore synchronization via onSnapshot (100% Firestore source of truth)
   useEffect(() => {
-    localStorage.setItem(STORAGE_KEYS.ACCOUNTS, JSON.stringify(allAccounts));
-  }, [allAccounts]);
-
-  useEffect(() => {
-    localStorage.setItem(STORAGE_KEYS.TRANSACTIONS, JSON.stringify(allTransactions));
-  }, [allTransactions]);
-
-  useEffect(() => {
-    localStorage.setItem(STORAGE_KEYS.USERS_LIST, JSON.stringify(registeredUsers));
-  }, [registeredUsers]);
-
-  // Real-time Firestore synchronization via onSnapshot for instant multi-device / multi-phone updates
-  useEffect(() => {
-    const deletedIdsJson = localStorage.getItem(STORAGE_KEYS.DELETED_USERS);
-    const deletedUserIds: string[] = deletedIdsJson ? JSON.parse(deletedIdsJson) : [];
-    const deletedUserSet = new Set(deletedUserIds);
-
     const unsubUsers = onSnapshot(
       collection(db, 'users'),
-      (snapshot) => {
+      async (snapshot) => {
         const firestoreUsers: UserSession[] = [];
         snapshot.forEach((d) => {
           firestoreUsers.push(d.data() as UserSession);
         });
-        if (firestoreUsers.length > 0) {
-          const userMap = new Map<string, UserSession>();
-          DEMO_PERSONAS.map((p) => p.user).forEach((u) => {
-            if (!deletedUserSet.has(u.id)) userMap.set(u.id, u);
-          });
-          try {
-            const localSaved = localStorage.getItem(STORAGE_KEYS.USERS_LIST);
-            if (localSaved) {
-              const parsedLocal: UserSession[] = JSON.parse(localSaved);
-              parsedLocal.forEach((u) => {
-                if (!deletedUserSet.has(u.id)) userMap.set(u.id, u);
-              });
+
+        if (firestoreUsers.length === 0) {
+          const isPurged = localStorage.getItem('aura_bank_purged') === 'true';
+          if (!isPurged) {
+            try {
+              for (const persona of DEMO_PERSONAS) {
+                await setDoc(doc(db, 'users', persona.user.id), persona.user);
+              }
+              for (const persona of DEMO_PERSONAS) {
+                for (const acc of persona.accounts) {
+                  const accountWithUser = { ...acc, userId: acc.userId || persona.user.id };
+                  await setDoc(doc(db, 'accounts', accountWithUser.id), accountWithUser);
+                }
+              }
+              for (const txn of INITIAL_TRANSACTIONS) {
+                await setDoc(doc(db, 'transactions', txn.id), txn);
+              }
+            } catch (err) {
+              console.error('Error seeding demo data:', err);
             }
-          } catch {}
-          firestoreUsers.forEach((u) => {
-            if (!deletedUserSet.has(u.id)) userMap.set(u.id, u);
-          });
-          setRegisteredUsers(Array.from(userMap.values()));
+          } else {
+            setRegisteredUsers([]);
+          }
+        } else {
+          setRegisteredUsers(firestoreUsers);
         }
       },
       (err) => {
-        console.error('Users snapshot error:', err);
+        handleFirestoreError(err, OperationType.GET, 'users');
       }
     );
 
@@ -267,30 +205,10 @@ export const BankingProvider: React.FC<{ children: React.ReactNode }> = ({ child
         snapshot.forEach((d) => {
           firestoreAccounts.push(d.data() as Account);
         });
-        if (firestoreAccounts.length > 0) {
-          const accMap = new Map<string, Account>();
-          DEMO_PERSONAS.flatMap((p) =>
-            p.accounts.map((a) => ({ ...a, userId: a.userId || p.user.id }))
-          ).forEach((a) => {
-            if (a.userId && !deletedUserSet.has(a.userId)) accMap.set(a.id, a);
-          });
-          try {
-            const localSavedAccs = localStorage.getItem(STORAGE_KEYS.ACCOUNTS);
-            if (localSavedAccs) {
-              const parsedAccs: Account[] = JSON.parse(localSavedAccs);
-              parsedAccs.forEach((a) => {
-                if (a.userId && !deletedUserSet.has(a.userId)) accMap.set(a.id, a);
-              });
-            }
-          } catch {}
-          firestoreAccounts.forEach((a) => {
-            if (a.userId && !deletedUserSet.has(a.userId)) accMap.set(a.id, a);
-          });
-          setAllAccounts(Array.from(accMap.values()) as Account[]);
-        }
+        setAllAccounts(firestoreAccounts);
       },
       (err) => {
-        console.error('Accounts snapshot error:', err);
+        handleFirestoreError(err, OperationType.GET, 'accounts');
       }
     );
 
@@ -301,12 +219,10 @@ export const BankingProvider: React.FC<{ children: React.ReactNode }> = ({ child
         snapshot.forEach((d) => {
           firestoreTxns.push(d.data() as Transaction);
         });
-        if (firestoreTxns.length > 0) {
-          setAllTransactions(firestoreTxns);
-        }
+        setAllTransactions(firestoreTxns);
       },
       (err) => {
-        console.error('Transactions snapshot error:', err);
+        handleFirestoreError(err, OperationType.GET, 'transactions');
       }
     );
 
@@ -801,37 +717,66 @@ export const BankingProvider: React.FC<{ children: React.ReactNode }> = ({ child
     return { success: true, message: 'Internal transfer completed' };
   };
 
-  const resetToDemoData = () => {
+  const resetToDemoData = async () => {
     localStorage.removeItem(STORAGE_KEYS.USER);
     localStorage.removeItem(STORAGE_KEYS.REMEMBER_ME);
-    localStorage.removeItem(STORAGE_KEYS.ACCOUNTS);
-    localStorage.removeItem(STORAGE_KEYS.TRANSACTIONS);
-    localStorage.removeItem(STORAGE_KEYS.USERS_LIST);
-    localStorage.removeItem(STORAGE_KEYS.DELETED_USERS);
-    sessionStorage.removeItem(STORAGE_KEYS.SESSION_USER);
+    localStorage.removeItem('aura_bank_purged');
+    sessionStorage.clear();
 
     setUser(null);
-    setRegisteredUsers(DEMO_PERSONAS.map((p) => p.user));
-    setAllAccounts(
-      DEMO_PERSONAS.flatMap((p) =>
-        p.accounts.map((a) => ({ ...a, userId: a.userId || p.user.id }))
-      )
-    );
-    setAllTransactions(INITIAL_TRANSACTIONS);
     setIsAdminMode(false);
+
+    try {
+      const usersSnap = await getDocs(collection(db, 'users'));
+      for (const d of usersSnap.docs) {
+        await deleteDoc(doc(db, 'users', d.id));
+      }
+      const accountsSnap = await getDocs(collection(db, 'accounts'));
+      for (const d of accountsSnap.docs) {
+        await deleteDoc(doc(db, 'accounts', d.id));
+      }
+      const txnSnap = await getDocs(collection(db, 'transactions'));
+      for (const d of txnSnap.docs) {
+        await deleteDoc(doc(db, 'transactions', d.id));
+      }
+
+      for (const persona of DEMO_PERSONAS) {
+        await setDoc(doc(db, 'users', persona.user.id), persona.user);
+      }
+      for (const persona of DEMO_PERSONAS) {
+        for (const acc of persona.accounts) {
+          const accountWithUser = { ...acc, userId: acc.userId || persona.user.id };
+          await setDoc(doc(db, 'accounts', accountWithUser.id), accountWithUser);
+        }
+      }
+      for (const txn of INITIAL_TRANSACTIONS) {
+        await setDoc(doc(db, 'transactions', txn.id), txn);
+      }
+    } catch (err) {
+      console.error('Reset to demo data error:', err);
+    }
   };
 
-  const purgeSiteData = () => {
-    const keysToRemove: string[] = [];
-    for (let i = 0; i < localStorage.length; i++) {
-      const key = localStorage.key(i);
-      if (key && (key.startsWith('aura_bank_') || key.includes('aura'))) {
-        keysToRemove.push(key);
+  const purgeSiteData = async () => {
+    try {
+      const usersSnap = await getDocs(collection(db, 'users'));
+      for (const d of usersSnap.docs) {
+        await deleteDoc(doc(db, 'users', d.id));
       }
+      const accountsSnap = await getDocs(collection(db, 'accounts'));
+      for (const d of accountsSnap.docs) {
+        await deleteDoc(doc(db, 'accounts', d.id));
+      }
+      const txnSnap = await getDocs(collection(db, 'transactions'));
+      for (const d of txnSnap.docs) {
+        await deleteDoc(doc(db, 'transactions', d.id));
+      }
+    } catch (err) {
+      console.error('Purge Firestore error:', err);
     }
-    keysToRemove.forEach((k) => localStorage.removeItem(k));
-    Object.values(STORAGE_KEYS).forEach((k) => localStorage.removeItem(k));
-    localStorage.removeItem(STORAGE_KEYS.DELETED_USERS);
+
+    localStorage.clear();
+    localStorage.setItem('aura_bank_purged', 'true');
     sessionStorage.clear();
 
     setUser(null);
