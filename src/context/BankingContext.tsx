@@ -1,6 +1,8 @@
 import React, { createContext, useContext, useEffect, useMemo, useState } from 'react';
 import { DEMO_PERSONAS, INITIAL_BENEFICIARIES, INITIAL_TRANSACTIONS } from '../data/mockData';
 import { Account, Beneficiary, Transaction, UserSession, VirtualCard } from '../types/banking';
+import { db, OperationType, handleFirestoreError } from '../lib/firebase';
+import { doc, setDoc, updateDoc, deleteDoc } from 'firebase/firestore';
 
 interface DepositParams {
   accountId: string;
@@ -304,49 +306,8 @@ export const BankingProvider: React.FC<{ children: React.ReactNode }> = ({ child
       return true;
     }
 
-    // Unrecognized email/username: Create brand new profile
-    // Requirement: "new accounts should be zero, clean, no transactions"
-    const name = email.split('@')[0].replace(/[._]/g, ' ');
-    const initials =
-      name
-        .split(' ')
-        .map((n) => n[0]?.toUpperCase())
-        .join('')
-        .slice(0, 2) || 'US';
-
-    const newUserId = `usr_${Date.now()}`;
-    const newUser: UserSession = {
-      id: newUserId,
-      name: name.charAt(0).toUpperCase() + name.slice(1),
-      email,
-      company: 'USA Grant Recipient',
-      tier: 'Commercial Executive',
-      avatarInitials: initials,
-      memberSince: 'October 2026',
-      phone: '+1 (800) 555-0199',
-      twoFactorEnabled: true,
-    };
-
-    // Clean zero-balance account with NO transactions
-    const newAccount: Account = {
-      id: `acc_${newUserId}`,
-      userId: newUserId,
-      name: 'Primary Commercial Checking',
-      accountNumber: '•••• ' + Math.floor(1000 + Math.random() * 9000),
-      fullAccountNumber: '021000' + Math.floor(100000 + Math.random() * 900000),
-      routingNumber: '021000021',
-      type: 'checking',
-      balance: 0.0, // EXACTLY 0.00: clean, zero balance
-      currency: 'USD',
-      dailyWithdrawalLimit: 25000,
-      withdrawnToday: 0,
-    };
-
-    setRegisteredUsers((prev) => [newUser, ...prev]);
-    setAllAccounts((prev) => [newAccount, ...prev]);
-    setIsAdminMode(false);
-    saveUserSession(newUser, rememberMe);
-    return true;
+    // Only registered accounts or demo personas can sign in
+    return false;
   };
 
   const register = (
@@ -395,6 +356,8 @@ export const BankingProvider: React.FC<{ children: React.ReactNode }> = ({ child
     // NOTE: Zero transactions! Clean slate!
     setIsAdminMode(false);
     saveUserSession(newUser, rememberMe);
+    setDoc(doc(db, 'users', newUserId), newUser).catch((err) => handleFirestoreError(err, OperationType.CREATE, `users/${newUserId}`));
+    setDoc(doc(db, 'accounts', newAccount.id), newAccount).catch((err) => handleFirestoreError(err, OperationType.CREATE, `accounts/${newAccount.id}`));
   };
 
   const logout = () => {
@@ -405,7 +368,7 @@ export const BankingProvider: React.FC<{ children: React.ReactNode }> = ({ child
     setIsAdminMode(false);
   };
 
-  // Admin capabilities
+  // Admin capabilities with Firestore persistence
   const updateUserDetails = (userId: string, data: Partial<UserSession>) => {
     setRegisteredUsers((prev) =>
       prev.map((u) => (u.id === userId ? { ...u, ...data } : u))
@@ -420,6 +383,7 @@ export const BankingProvider: React.FC<{ children: React.ReactNode }> = ({ child
         sessionStorage.setItem(STORAGE_KEYS.SESSION_USER, JSON.stringify(updated));
       }
     }
+    updateDoc(doc(db, 'users', userId), data).catch((err) => handleFirestoreError(err, OperationType.UPDATE, `users/${userId}`));
   };
 
   const deleteUser = (userId: string): boolean => {
@@ -432,6 +396,11 @@ export const BankingProvider: React.FC<{ children: React.ReactNode }> = ({ child
     setRegisteredUsers((prev) => prev.filter((u) => u.id !== userId));
     setAllAccounts((prev) => prev.filter((a) => a.userId !== userId));
     setAllTransactions((prev) => prev.filter((t) => !userAccountIds.has(t.accountId)));
+
+    deleteDoc(doc(db, 'users', userId)).catch((err) => handleFirestoreError(err, OperationType.DELETE, `users/${userId}`));
+    userAccountIds.forEach((accId) => {
+      deleteDoc(doc(db, 'accounts', accId)).catch((err) => handleFirestoreError(err, OperationType.DELETE, `accounts/${accId}`));
+    });
     return true;
   };
 
@@ -439,18 +408,22 @@ export const BankingProvider: React.FC<{ children: React.ReactNode }> = ({ child
     setAllAccounts((prev) =>
       prev.map((a) => (a.id === accountId ? { ...a, ...data } : a))
     );
+    updateDoc(doc(db, 'accounts', accountId), data).catch((err) => handleFirestoreError(err, OperationType.UPDATE, `accounts/${accountId}`));
   };
 
   const setAccountBalance = (accountId: string, newBalance: number) => {
+    const balNum = Number(newBalance);
     setAllAccounts((prev) =>
-      prev.map((a) => (a.id === accountId ? { ...a, balance: Number(newBalance) } : a))
+      prev.map((a) => (a.id === accountId ? { ...a, balance: balNum } : a))
     );
+    updateDoc(doc(db, 'accounts', accountId), { balance: balNum }).catch((err) => handleFirestoreError(err, OperationType.UPDATE, `accounts/${accountId}`));
   };
 
   const updateTransaction = (transactionId: string, data: Partial<Transaction>) => {
     setAllTransactions((prev) =>
       prev.map((t) => (t.id === transactionId ? { ...t, ...data } : t))
     );
+    updateDoc(doc(db, 'transactions', transactionId), data).catch((err) => handleFirestoreError(err, OperationType.UPDATE, `transactions/${transactionId}`));
   };
 
   const addTransaction = (data: Omit<Transaction, 'id'>): Transaction => {
@@ -459,11 +432,13 @@ export const BankingProvider: React.FC<{ children: React.ReactNode }> = ({ child
       id: `txn_${Date.now()}_${Math.floor(Math.random() * 1000)}`,
     };
     setAllTransactions((prev) => [newTxn, ...prev]);
+    setDoc(doc(db, 'transactions', newTxn.id), newTxn).catch((err) => handleFirestoreError(err, OperationType.CREATE, `transactions/${newTxn.id}`));
     return newTxn;
   };
 
   const deleteTransaction = (transactionId: string) => {
     setAllTransactions((prev) => prev.filter((t) => t.id !== transactionId));
+    deleteDoc(doc(db, 'transactions', transactionId)).catch((err) => handleFirestoreError(err, OperationType.DELETE, `transactions/${transactionId}`));
   };
 
   const deposit = ({
@@ -475,6 +450,7 @@ export const BankingProvider: React.FC<{ children: React.ReactNode }> = ({ child
     const target = accounts.find((a) => a.id === accountId) || accounts[0];
     if (!target) return { success: false, message: 'Account not found' };
 
+    const newBal = target.balance + Math.abs(amount);
     const txn: Transaction = {
       id: `txn_dep_${Date.now()}`,
       accountId: target.id,
@@ -491,10 +467,13 @@ export const BankingProvider: React.FC<{ children: React.ReactNode }> = ({ child
 
     setAllAccounts((prev) =>
       prev.map((a) =>
-        a.id === target.id ? { ...a, balance: a.balance + Math.abs(amount) } : a
+        a.id === target.id ? { ...a, balance: newBal } : a
       )
     );
     setAllTransactions((prev) => [txn, ...prev]);
+
+    updateDoc(doc(db, 'accounts', target.id), { balance: newBal }).catch((err) => handleFirestoreError(err, OperationType.UPDATE, `accounts/${target.id}`));
+    setDoc(doc(db, 'transactions', txn.id), txn).catch((err) => handleFirestoreError(err, OperationType.CREATE, `transactions/${txn.id}`));
 
     return { success: true, message: 'Deposit completed successfully', transaction: txn };
   };
@@ -512,6 +491,7 @@ export const BankingProvider: React.FC<{ children: React.ReactNode }> = ({ child
       return { success: false, message: 'Insufficient funds available in selected account' };
     }
 
+    const newBal = target.balance - Math.abs(amount);
     const txn: Transaction = {
       id: `txn_wd_${Date.now()}`,
       accountId: target.id,
@@ -528,10 +508,13 @@ export const BankingProvider: React.FC<{ children: React.ReactNode }> = ({ child
 
     setAllAccounts((prev) =>
       prev.map((a) =>
-        a.id === target.id ? { ...a, balance: a.balance - Math.abs(amount) } : a
+        a.id === target.id ? { ...a, balance: newBal } : a
       )
     );
     setAllTransactions((prev) => [txn, ...prev]);
+
+    updateDoc(doc(db, 'accounts', target.id), { balance: newBal }).catch((err) => handleFirestoreError(err, OperationType.UPDATE, `accounts/${target.id}`));
+    setDoc(doc(db, 'transactions', txn.id), txn).catch((err) => handleFirestoreError(err, OperationType.CREATE, `transactions/${txn.id}`));
 
     return { success: true, message: 'Withdrawal completed', transaction: txn };
   };
@@ -548,10 +531,13 @@ export const BankingProvider: React.FC<{ children: React.ReactNode }> = ({ child
     if (!fromAcct || !toAcct) return { success: false, message: 'Invalid accounts' };
     if (fromAcct.balance < amount) return { success: false, message: 'Insufficient funds' };
 
+    const fromNewBal = fromAcct.balance - amount;
+    const toNewBal = toAcct.balance + amount;
+
     setAllAccounts((prev) =>
       prev.map((a) => {
-        if (a.id === fromAccountId) return { ...a, balance: a.balance - amount };
-        if (a.id === toAccountId) return { ...a, balance: a.balance + amount };
+        if (a.id === fromAccountId) return { ...a, balance: fromNewBal };
+        if (a.id === toAccountId) return { ...a, balance: toNewBal };
         return a;
       })
     );
@@ -586,6 +572,12 @@ export const BankingProvider: React.FC<{ children: React.ReactNode }> = ({ child
     };
 
     setAllTransactions((prev) => [txnOut, txnIn, ...prev]);
+
+    updateDoc(doc(db, 'accounts', fromAccountId), { balance: fromNewBal }).catch((err) => handleFirestoreError(err, OperationType.UPDATE, `accounts/${fromAccountId}`));
+    updateDoc(doc(db, 'accounts', toAccountId), { balance: toNewBal }).catch((err) => handleFirestoreError(err, OperationType.UPDATE, `accounts/${toAccountId}`));
+    setDoc(doc(db, 'transactions', txnOut.id), txnOut).catch((err) => handleFirestoreError(err, OperationType.CREATE, `transactions/${txnOut.id}`));
+    setDoc(doc(db, 'transactions', txnIn.id), txnIn).catch((err) => handleFirestoreError(err, OperationType.CREATE, `transactions/${txnIn.id}`));
+
     return { success: true, message: 'Internal transfer completed' };
   };
 
