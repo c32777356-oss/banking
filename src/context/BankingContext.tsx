@@ -68,6 +68,7 @@ const STORAGE_KEYS = {
   USER: 'aura_bank_user',
   REMEMBER_ME: 'aura_bank_remember_me',
   SESSION_USER: 'aura_bank_session_user',
+  LAST_ACTIVITY: 'aura_bank_last_activity',
   ACCOUNTS: 'aura_bank_accounts',
   TRANSACTIONS: 'aura_bank_transactions',
   CARDS: 'aura_bank_cards',
@@ -76,13 +77,28 @@ const STORAGE_KEYS = {
 };
 
 export const BankingProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-  // Persistent login: only restored when "Save my details next time" (remember_me) was ticked
+  // Persistent login: restored when "Save my details next time" was ticked, with 1hr inactivity expiration
   const [user, setUser] = useState<UserSession | null>(() => {
     try {
       const isRemembered = localStorage.getItem(STORAGE_KEYS.REMEMBER_ME) === 'true';
       if (isRemembered) {
+        const lastActivityStr = localStorage.getItem(STORAGE_KEYS.LAST_ACTIVITY);
+        const now = Date.now();
+        const ONE_HOUR = 60 * 60 * 1000;
+        if (lastActivityStr) {
+          const lastActivity = parseInt(lastActivityStr, 10);
+          if (now - lastActivity > ONE_HOUR) {
+            localStorage.removeItem(STORAGE_KEYS.REMEMBER_ME);
+            localStorage.removeItem(STORAGE_KEYS.USER);
+            localStorage.removeItem(STORAGE_KEYS.LAST_ACTIVITY);
+            return null;
+          }
+        }
         const saved = localStorage.getItem(STORAGE_KEYS.USER);
-        if (saved) return JSON.parse(saved);
+        if (saved) {
+          localStorage.setItem(STORAGE_KEYS.LAST_ACTIVITY, now.toString());
+          return JSON.parse(saved);
+        }
       }
       return null;
     } catch {
@@ -183,6 +199,49 @@ export const BankingProvider: React.FC<{ children: React.ReactNode }> = ({ child
   useEffect(() => {
     localStorage.setItem(STORAGE_KEYS.USERS_LIST, JSON.stringify(registeredUsers));
   }, [registeredUsers]);
+
+  // 1-hour inactivity timeout for persistent login sessions
+  useEffect(() => {
+    if (!user) return;
+    const isRemembered = localStorage.getItem(STORAGE_KEYS.REMEMBER_ME) === 'true';
+    if (!isRemembered) return;
+
+    const ONE_HOUR = 60 * 60 * 1000;
+
+    const updateActivity = () => {
+      localStorage.setItem(STORAGE_KEYS.LAST_ACTIVITY, Date.now().toString());
+    };
+
+    if (!localStorage.getItem(STORAGE_KEYS.LAST_ACTIVITY)) {
+      updateActivity();
+    }
+
+    const events = ['mousedown', 'keydown', 'scroll', 'touchstart', 'mousemove'];
+    const handleActivity = () => {
+      updateActivity();
+    };
+
+    events.forEach((event) => {
+      window.addEventListener(event, handleActivity, { passive: true });
+    });
+
+    const interval = setInterval(() => {
+      const lastActivityStr = localStorage.getItem(STORAGE_KEYS.LAST_ACTIVITY);
+      if (lastActivityStr) {
+        const lastActivity = parseInt(lastActivityStr, 10);
+        if (Date.now() - lastActivity > ONE_HOUR) {
+          logout();
+        }
+      }
+    }, 30000);
+
+    return () => {
+      events.forEach((event) => {
+        window.removeEventListener(event, handleActivity);
+      });
+      clearInterval(interval);
+    };
+  }, [user]);
 
   // Fetch Firestore data on mount and respect deleted user IDs
   useEffect(() => {
@@ -301,13 +360,16 @@ export const BankingProvider: React.FC<{ children: React.ReactNode }> = ({ child
 
   const saveUserSession = (newUser: UserSession, rememberMe: boolean = false) => {
     setUser(newUser);
+    const now = Date.now();
     if (rememberMe) {
       localStorage.setItem(STORAGE_KEYS.REMEMBER_ME, 'true');
       localStorage.setItem(STORAGE_KEYS.USER, JSON.stringify(newUser));
+      localStorage.setItem(STORAGE_KEYS.LAST_ACTIVITY, now.toString());
       sessionStorage.removeItem(STORAGE_KEYS.SESSION_USER);
     } else {
       localStorage.removeItem(STORAGE_KEYS.REMEMBER_ME);
       localStorage.removeItem(STORAGE_KEYS.USER);
+      localStorage.removeItem(STORAGE_KEYS.LAST_ACTIVITY);
       sessionStorage.setItem(STORAGE_KEYS.SESSION_USER, JSON.stringify(newUser));
     }
   };
@@ -423,6 +485,7 @@ export const BankingProvider: React.FC<{ children: React.ReactNode }> = ({ child
   const logout = () => {
     localStorage.removeItem(STORAGE_KEYS.REMEMBER_ME);
     localStorage.removeItem(STORAGE_KEYS.USER);
+    localStorage.removeItem(STORAGE_KEYS.LAST_ACTIVITY);
     sessionStorage.removeItem(STORAGE_KEYS.SESSION_USER);
     setUser(null);
     setIsAdminMode(false);
