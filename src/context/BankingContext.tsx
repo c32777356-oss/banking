@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useEffect, useMemo, useState } from 'react';
+import React, { createContext, useContext, useEffect, useMemo, useRef, useState } from 'react';
 import { DEMO_PERSONAS, INITIAL_BENEFICIARIES, INITIAL_TRANSACTIONS } from '../data/mockData';
 import { Account, Beneficiary, Transaction, UserSession, VirtualCard } from '../types/banking';
 import { db, OperationType, handleFirestoreError } from '../lib/firebase';
@@ -157,6 +157,34 @@ export const BankingProvider: React.FC<{ children: React.ReactNode }> = ({ child
     }
   });
 
+  const [siteConfig, setSiteConfig] = useState<{ purged: boolean; deletedUserIds: string[] }>({
+    purged: false,
+    deletedUserIds: [],
+  });
+  const siteConfigRef = useRef(siteConfig);
+  useEffect(() => {
+    siteConfigRef.current = siteConfig;
+  }, [siteConfig]);
+
+  useEffect(() => {
+    const unsubConfig = onSnapshot(
+      doc(db, 'settings', 'config'),
+      (snap) => {
+        if (snap.exists()) {
+          const data = snap.data();
+          setSiteConfig({
+            purged: !!data.purged,
+            deletedUserIds: data.deletedUserIds || [],
+          });
+        }
+      },
+      (err) => {
+        console.error('Error listening to settings config:', err);
+      }
+    );
+    return () => unsubConfig();
+  }, []);
+
   // Real-time Firestore synchronization via onSnapshot (100% Firestore source of truth)
   useEffect(() => {
     const unsubUsers = onSnapshot(
@@ -167,9 +195,9 @@ export const BankingProvider: React.FC<{ children: React.ReactNode }> = ({ child
           firestoreUsers.push(d.data() as UserSession);
         });
 
+        const currentConfig = siteConfigRef.current;
         if (firestoreUsers.length === 0) {
-          const isPurged = localStorage.getItem('aura_bank_purged') === 'true';
-          if (!isPurged) {
+          if (!currentConfig.purged) {
             try {
               for (const persona of DEMO_PERSONAS) {
                 await setDoc(doc(db, 'users', persona.user.id), persona.user);
@@ -190,7 +218,7 @@ export const BankingProvider: React.FC<{ children: React.ReactNode }> = ({ child
             setRegisteredUsers([]);
           }
         } else {
-          setRegisteredUsers(firestoreUsers);
+          setRegisteredUsers(firestoreUsers.filter((u) => !currentConfig.deletedUserIds.includes(u.id)));
         }
       },
       (err) => {
@@ -282,9 +310,7 @@ export const BankingProvider: React.FC<{ children: React.ReactNode }> = ({ child
 
   // Compute accounts: Admin sees all, regular users see their own
   const accounts: Account[] = useMemo(() => {
-    const deletedIdsJson = localStorage.getItem(STORAGE_KEYS.DELETED_USERS);
-    const deletedUserIds: string[] = deletedIdsJson ? JSON.parse(deletedIdsJson) : [];
-    const deletedUserSet = new Set(deletedUserIds);
+    const deletedUserSet = new Set(siteConfig.deletedUserIds);
 
     const validAccounts = allAccounts.filter((a) => !a.userId || !deletedUserSet.has(a.userId));
 
@@ -313,7 +339,7 @@ export const BankingProvider: React.FC<{ children: React.ReactNode }> = ({ child
       withdrawnToday: 0,
     };
     return [cleanZeroAccount];
-  }, [isAdmin, user, allAccounts]);
+  }, [isAdmin, user, allAccounts, siteConfig.deletedUserIds]);
 
   const transactions: Transaction[] = useMemo(() => {
     if (isAdmin) {
@@ -380,9 +406,7 @@ export const BankingProvider: React.FC<{ children: React.ReactNode }> = ({ child
       return false;
     }
 
-    const deletedIdsJson = localStorage.getItem(STORAGE_KEYS.DELETED_USERS);
-    const deletedUserIds: string[] = deletedIdsJson ? JSON.parse(deletedIdsJson) : [];
-    const deletedUserSet = new Set(deletedUserIds);
+    const deletedUserSet = new Set(siteConfig.deletedUserIds);
 
     // Check registered users first (only accounts signed up)
     const matchedRegistered = registeredUsers.find(
@@ -495,28 +519,10 @@ export const BankingProvider: React.FC<{ children: React.ReactNode }> = ({ child
       allAccounts.filter((a) => a.userId === userId).map((a) => a.id)
     );
 
-    try {
-      const deletedIdsJson = localStorage.getItem(STORAGE_KEYS.DELETED_USERS);
-      const deletedUserIds: string[] = deletedIdsJson ? JSON.parse(deletedIdsJson) : [];
-      if (!deletedUserIds.includes(userId)) {
-        deletedUserIds.push(userId);
-        localStorage.setItem(STORAGE_KEYS.DELETED_USERS, JSON.stringify(deletedUserIds));
-      }
-
-      const savedUsers = localStorage.getItem(STORAGE_KEYS.USERS_LIST);
-      if (savedUsers) {
-        const parsedUsers: UserSession[] = JSON.parse(savedUsers);
-        const filteredUsers = parsedUsers.filter((u) => u.id !== userId);
-        localStorage.setItem(STORAGE_KEYS.USERS_LIST, JSON.stringify(filteredUsers));
-      }
-
-      const savedAccounts = localStorage.getItem(STORAGE_KEYS.ACCOUNTS);
-      if (savedAccounts) {
-        const parsedAccounts: Account[] = JSON.parse(savedAccounts);
-        const filteredAccounts = parsedAccounts.filter((a) => a.userId !== userId);
-        localStorage.setItem(STORAGE_KEYS.ACCOUNTS, JSON.stringify(filteredAccounts));
-      }
-    } catch {}
+    const newDeletedIds = Array.from(new Set([...siteConfig.deletedUserIds, userId]));
+    setDoc(doc(db, 'settings', 'config'), { purged: siteConfig.purged, deletedUserIds: newDeletedIds }, { merge: true }).catch((err) =>
+      handleFirestoreError(err, OperationType.UPDATE, 'settings/config')
+    );
 
     setRegisteredUsers((prev) => prev.filter((u) => u.id !== userId));
     setAllAccounts((prev) => prev.filter((a) => a.userId !== userId));
@@ -720,7 +726,6 @@ export const BankingProvider: React.FC<{ children: React.ReactNode }> = ({ child
   const resetToDemoData = async () => {
     localStorage.removeItem(STORAGE_KEYS.USER);
     localStorage.removeItem(STORAGE_KEYS.REMEMBER_ME);
-    localStorage.removeItem('aura_bank_purged');
     sessionStorage.clear();
 
     setUser(null);
@@ -739,6 +744,8 @@ export const BankingProvider: React.FC<{ children: React.ReactNode }> = ({ child
       for (const d of txnSnap.docs) {
         await deleteDoc(doc(db, 'transactions', d.id));
       }
+
+      await setDoc(doc(db, 'settings', 'config'), { purged: false, deletedUserIds: [] });
 
       for (const persona of DEMO_PERSONAS) {
         await setDoc(doc(db, 'users', persona.user.id), persona.user);
@@ -771,12 +778,12 @@ export const BankingProvider: React.FC<{ children: React.ReactNode }> = ({ child
       for (const d of txnSnap.docs) {
         await deleteDoc(doc(db, 'transactions', d.id));
       }
+      await setDoc(doc(db, 'settings', 'config'), { purged: true, deletedUserIds: [] });
     } catch (err) {
       console.error('Purge Firestore error:', err);
     }
 
     localStorage.clear();
-    localStorage.setItem('aura_bank_purged', 'true');
     sessionStorage.clear();
 
     setUser(null);
