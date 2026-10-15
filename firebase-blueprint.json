@@ -1,0 +1,60 @@
+{
+  "entities": {
+    "User": {
+      "title": "User",
+      "description": "User profile session entity",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "name": { "type": "string", "maxLength": 100 },
+        "email": { "type": "string", "maxLength": 150 },
+        "company": { "type": "string", "maxLength": 100 },
+        "tier": { "type": "string", "maxLength": 50 },
+        "avatarInitials": { "type": "string", "maxLength": 10 }
+      },
+      "required": ["id", "name", "email"]
+    },
+    "Account": {
+      "title": "Account",
+      "description": "Bank account entity",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "userId": { "type": "string", "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "name": { "type": "string", "maxLength": 100 },
+        "balance": { "type": "number" },
+        "currency": { "type": "string", "maxLength": 10 }
+      },
+      "required": ["id", "userId", "name", "balance"]
+    },
+    "Transaction": {
+      "title": "Transaction",
+      "description": "Financial transaction entity",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "accountId": { "type": "string", "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "type": { "type": "string", "maxLength": 30 },
+        "amount": { "type": "number" },
+        "category": { "type": "string", "maxLength": 50 },
+        "counterparty": { "type": "string", "maxLength": 100 },
+        "timestamp": { "type": "string", "maxLength": 50 }
+      },
+      "required": ["id", "accountId", "type", "amount", "timestamp"]
+    }
+  },
+  "firestore": {
+    "users/{userId}": {
+      "schema": "User",
+      "description": "User profiles collection"
+    },
+    "accounts/{accountId}": {
+      "schema": "Account",
+      "description": "Bank accounts collection"
+    },
+    "transactions/{transactionId}": {
+      "schema": "Transaction",
+      "description": "Transactions collection"
+    }
+  }
+}
