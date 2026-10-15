@@ -188,8 +188,17 @@ export const OverviewView: React.FC<OverviewViewProps> = ({
         {/* Mobile View: Clean Touch List Rows */}
         <div className="sm:hidden divide-y divide-slate-100">
           {filteredTransactions.length === 0 ? (
-            <div className="py-8 text-center text-xs text-slate-400">
-              No transactions found.
+            <div className="py-12 text-center text-xs text-slate-400 space-y-1">
+              <p className="font-semibold text-slate-500">
+                {transactions.length === 0
+                  ? 'No transaction records found'
+                  : 'No transactions match the selected filter'}
+              </p>
+              <p className="text-[11px] text-slate-400">
+                {transactions.length === 0
+                  ? 'This account is brand new and clean with zero prior activity.'
+                  : 'Try adjusting your search query or filter criteria.'}
+              </p>
             </div>
           ) : (
             filteredTransactions.map((txn) => {
@@ -255,8 +264,17 @@ export const OverviewView: React.FC<OverviewViewProps> = ({
             <tbody className="divide-y divide-slate-100">
               {filteredTransactions.length === 0 ? (
                 <tr>
-                  <td colSpan={6} className="py-8 text-center text-slate-400">
-                    No transactions match the selected filter.
+                  <td colSpan={6} className="py-12 text-center text-slate-400 space-y-1">
+                    <p className="font-semibold text-slate-500">
+                      {transactions.length === 0
+                        ? 'No transaction records found'
+                        : 'No transactions match the selected filter.'}
+                    </p>
+                    <p className="text-[11px] text-slate-400">
+                      {transactions.length === 0
+                        ? 'This account is brand new and clean with zero prior activity.'
+                        : 'Try adjusting your search query or filter criteria.'}
+                    </p>
                   </td>
                 </tr>
               ) : (

@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useEffect, useState } from 'react';
+import React, { createContext, useContext, useEffect, useMemo, useState } from 'react';
 import { DEMO_PERSONAS, INITIAL_BENEFICIARIES, INITIAL_TRANSACTIONS } from '../data/mockData';
 import { Account, Beneficiary, Transaction, UserSession, VirtualCard } from '../types/banking';
 
@@ -98,19 +98,25 @@ export const BankingProvider: React.FC<{ children: React.ReactNode }> = ({ child
     }
   });
 
-  const [accounts, setAccounts] = useState<Account[]>(() => {
+  const [allAccounts, setAllAccounts] = useState<Account[]>(() => {
     try {
       const saved = localStorage.getItem(STORAGE_KEYS.ACCOUNTS);
-      return saved ? JSON.parse(saved) : DEMO_PERSONAS[0].accounts;
+      if (saved) return JSON.parse(saved);
+      return DEMO_PERSONAS.flatMap((p) =>
+        p.accounts.map((a) => ({ ...a, userId: a.userId || p.user.id }))
+      );
     } catch {
-      return DEMO_PERSONAS[0].accounts;
+      return DEMO_PERSONAS.flatMap((p) =>
+        p.accounts.map((a) => ({ ...a, userId: a.userId || p.user.id }))
+      );
     }
   });
 
-  const [transactions, setTransactions] = useState<Transaction[]>(() => {
+  const [allTransactions, setAllTransactions] = useState<Transaction[]>(() => {
     try {
       const saved = localStorage.getItem(STORAGE_KEYS.TRANSACTIONS);
-      return saved ? JSON.parse(saved) : INITIAL_TRANSACTIONS;
+      if (saved) return JSON.parse(saved);
+      return INITIAL_TRANSACTIONS;
     } catch {
       return INITIAL_TRANSACTIONS;
     }
@@ -153,16 +159,68 @@ export const BankingProvider: React.FC<{ children: React.ReactNode }> = ({ child
 
   // Sync state to storage
   useEffect(() => {
-    localStorage.setItem(STORAGE_KEYS.ACCOUNTS, JSON.stringify(accounts));
-  }, [accounts]);
+    localStorage.setItem(STORAGE_KEYS.ACCOUNTS, JSON.stringify(allAccounts));
+  }, [allAccounts]);
 
   useEffect(() => {
-    localStorage.setItem(STORAGE_KEYS.TRANSACTIONS, JSON.stringify(transactions));
-  }, [transactions]);
+    localStorage.setItem(STORAGE_KEYS.TRANSACTIONS, JSON.stringify(allTransactions));
+  }, [allTransactions]);
 
   useEffect(() => {
     localStorage.setItem(STORAGE_KEYS.USERS_LIST, JSON.stringify(registeredUsers));
   }, [registeredUsers]);
+
+  const isAdmin = user?.id === 'usr_admin' || isAdminMode;
+
+  // Compute accounts:
+  // Admin sees all accounts. Regular users see their own accounts.
+  // Requirement: "new accounts should be zero, clean, no transactions"
+  const accounts: Account[] = useMemo(() => {
+    if (isAdmin) {
+      return allAccounts;
+    }
+    if (!user) {
+      return [];
+    }
+    const userAccs = allAccounts.filter((a) => a.userId === user.id);
+    if (userAccs.length > 0) {
+      return userAccs;
+    }
+    // Match Jeffrery Charles Hiatt
+    if (user.id === 'usr_hiatt_01' || user.email === 'j.hiatt@usagrantfunding.org') {
+      const hiattAcc = allAccounts.find((a) => a.id === 'acc_chk_01');
+      if (hiattAcc) return [hiattAcc];
+    }
+    // Brand new user fallback: clean zero-balance account
+    const cleanZeroAccount: Account = {
+      id: `acc_usr_${user.id}`,
+      userId: user.id,
+      name: 'Primary Commercial Checking',
+      accountNumber: '•••• ' + (user.id.slice(-4) || '4892'),
+      fullAccountNumber: '021000' + (user.id.slice(-6) || '892401'),
+      routingNumber: '021000021',
+      type: 'checking',
+      balance: 0.0, // EXACTLY 0.00
+      currency: 'USD',
+      dailyWithdrawalLimit: 25000,
+      withdrawnToday: 0,
+    };
+    return [cleanZeroAccount];
+  }, [isAdmin, user, allAccounts]);
+
+  // Compute transactions:
+  // Admin sees all transactions. Regular users see only their own accounts' transactions.
+  // For any new account with no activity, returns [] (clean, zero transactions).
+  const transactions: Transaction[] = useMemo(() => {
+    if (isAdmin) {
+      return allTransactions;
+    }
+    if (!user || accounts.length === 0) {
+      return [];
+    }
+    const userAccountIds = new Set(accounts.map((a) => a.id));
+    return allTransactions.filter((t) => userAccountIds.has(t.accountId));
+  }, [isAdmin, user, accounts, allTransactions]);
 
   const activeAccount = accounts.find((a) => a.id === selectedAccountId) || accounts[0] || null;
   const totalNetWorth = accounts.reduce((acc, curr) => acc + curr.balance, 0);
@@ -183,7 +241,6 @@ export const BankingProvider: React.FC<{ children: React.ReactNode }> = ({ child
   const loginAsPersona = (index: number, rememberMe: boolean = false) => {
     const persona = DEMO_PERSONAS[index] || DEMO_PERSONAS[0];
     saveUserSession(persona.user, rememberMe);
-    setAccounts(persona.accounts);
     setSelectedAccountId(null);
   };
 
@@ -223,7 +280,6 @@ export const BankingProvider: React.FC<{ children: React.ReactNode }> = ({ child
     if (matchedPersona) {
       setIsAdminMode(false);
       saveUserSession(matchedPersona.user, rememberMe);
-      setAccounts(matchedPersona.accounts);
       return true;
     }
 
@@ -231,11 +287,13 @@ export const BankingProvider: React.FC<{ children: React.ReactNode }> = ({ child
       (u) => u.email.toLowerCase() === email.toLowerCase()
     );
     if (matchedRegistered) {
+      setIsAdminMode(false);
       saveUserSession(matchedRegistered, rememberMe);
       return true;
     }
 
-    // Create new profile for client email
+    // Unrecognized email/username: Create brand new profile
+    // Requirement: "new accounts should be zero, clean, no transactions"
     const name = email.split('@')[0].replace(/[._]/g, ' ');
     const initials =
       name
@@ -244,11 +302,12 @@ export const BankingProvider: React.FC<{ children: React.ReactNode }> = ({ child
         .join('')
         .slice(0, 2) || 'US';
 
+    const newUserId = `usr_${Date.now()}`;
     const newUser: UserSession = {
-      id: `usr_${Date.now()}`,
+      id: newUserId,
       name: name.charAt(0).toUpperCase() + name.slice(1),
       email,
-      company: 'Enterprise Commercial Client',
+      company: 'USA Grant Recipient',
       tier: 'Commercial Executive',
       avatarInitials: initials,
       memberSince: 'October 2026',
@@ -256,7 +315,24 @@ export const BankingProvider: React.FC<{ children: React.ReactNode }> = ({ child
       twoFactorEnabled: true,
     };
 
+    // Clean zero-balance account with NO transactions
+    const newAccount: Account = {
+      id: `acc_${newUserId}`,
+      userId: newUserId,
+      name: 'Primary Commercial Checking',
+      accountNumber: '•••• ' + Math.floor(1000 + Math.random() * 9000),
+      fullAccountNumber: '021000' + Math.floor(100000 + Math.random() * 900000),
+      routingNumber: '021000021',
+      type: 'checking',
+      balance: 0.0, // EXACTLY 0.00: clean, zero balance
+      currency: 'USD',
+      dailyWithdrawalLimit: 25000,
+      withdrawnToday: 0,
+    };
+
     setRegisteredUsers((prev) => [newUser, ...prev]);
+    setAllAccounts((prev) => [newAccount, ...prev]);
+    setIsAdminMode(false);
     saveUserSession(newUser, rememberMe);
     return true;
   };
@@ -274,35 +350,38 @@ export const BankingProvider: React.FC<{ children: React.ReactNode }> = ({ child
         .join('')
         .slice(0, 2) || 'AV';
 
+    const newUserId = `usr_${Date.now()}`;
     const newUser: UserSession = {
-      id: `usr_${Date.now()}`,
+      id: newUserId,
       name,
       email,
-      company: company || 'Commercial Entity',
-      tier: 'Premier Corporate',
+      company: company || 'USA Grant Recipient',
+      tier: 'Commercial Executive',
       avatarInitials: initials,
       memberSince: 'October 2026',
       phone: '+1 (800) 555-0199',
       twoFactorEnabled: true,
     };
 
-    const newAccounts: Account[] = [
-      {
-        id: `acc_chk_${Date.now()}`,
-        name: 'Primary Operating Checking',
-        accountNumber: '•••• ' + Math.floor(1000 + Math.random() * 9000),
-        fullAccountNumber: '021000' + Math.floor(100000 + Math.random() * 900000),
-        routingNumber: '021000021',
-        type: 'checking',
-        balance: 100000.0,
-        currency: 'USD',
-        dailyWithdrawalLimit: 100000,
-        withdrawnToday: 0,
-      },
-    ];
+    // Requirement: "new accounts should be zero, clean, no transactions"
+    const newAccount: Account = {
+      id: `acc_${newUserId}`,
+      userId: newUserId,
+      name: 'Primary Commercial Checking',
+      accountNumber: '•••• ' + Math.floor(1000 + Math.random() * 9000),
+      fullAccountNumber: '021000' + Math.floor(100000 + Math.random() * 900000),
+      routingNumber: '021000021',
+      type: 'checking',
+      balance: 0.0, // EXACTLY 0.00: zero balance, clean
+      currency: 'USD',
+      dailyWithdrawalLimit: 25000,
+      withdrawnToday: 0,
+    };
 
     setRegisteredUsers((prev) => [newUser, ...prev]);
-    setAccounts(newAccounts);
+    setAllAccounts((prev) => [newAccount, ...prev]);
+    // NOTE: Zero transactions! Clean slate!
+    setIsAdminMode(false);
     saveUserSession(newUser, rememberMe);
   };
 
@@ -335,24 +414,29 @@ export const BankingProvider: React.FC<{ children: React.ReactNode }> = ({ child
     if (userId === 'usr_admin') {
       return false;
     }
+    const userAccountIds = new Set(
+      allAccounts.filter((a) => a.userId === userId).map((a) => a.id)
+    );
     setRegisteredUsers((prev) => prev.filter((u) => u.id !== userId));
+    setAllAccounts((prev) => prev.filter((a) => a.userId !== userId));
+    setAllTransactions((prev) => prev.filter((t) => !userAccountIds.has(t.accountId)));
     return true;
   };
 
   const updateAccountDetails = (accountId: string, data: Partial<Account>) => {
-    setAccounts((prev) =>
+    setAllAccounts((prev) =>
       prev.map((a) => (a.id === accountId ? { ...a, ...data } : a))
     );
   };
 
   const setAccountBalance = (accountId: string, newBalance: number) => {
-    setAccounts((prev) =>
+    setAllAccounts((prev) =>
       prev.map((a) => (a.id === accountId ? { ...a, balance: Number(newBalance) } : a))
     );
   };
 
   const updateTransaction = (transactionId: string, data: Partial<Transaction>) => {
-    setTransactions((prev) =>
+    setAllTransactions((prev) =>
       prev.map((t) => (t.id === transactionId ? { ...t, ...data } : t))
     );
   };
@@ -362,12 +446,12 @@ export const BankingProvider: React.FC<{ children: React.ReactNode }> = ({ child
       ...data,
       id: `txn_${Date.now()}_${Math.floor(Math.random() * 1000)}`,
     };
-    setTransactions((prev) => [newTxn, ...prev]);
+    setAllTransactions((prev) => [newTxn, ...prev]);
     return newTxn;
   };
 
   const deleteTransaction = (transactionId: string) => {
-    setTransactions((prev) => prev.filter((t) => t.id !== transactionId));
+    setAllTransactions((prev) => prev.filter((t) => t.id !== transactionId));
   };
 
   const deposit = ({
@@ -393,12 +477,12 @@ export const BankingProvider: React.FC<{ children: React.ReactNode }> = ({ child
       fundingMethod,
     };
 
-    setAccounts((prev) =>
+    setAllAccounts((prev) =>
       prev.map((a) =>
         a.id === target.id ? { ...a, balance: a.balance + Math.abs(amount) } : a
       )
     );
-    setTransactions((prev) => [txn, ...prev]);
+    setAllTransactions((prev) => [txn, ...prev]);
 
     return { success: true, message: 'Deposit completed successfully', transaction: txn };
   };
@@ -430,12 +514,12 @@ export const BankingProvider: React.FC<{ children: React.ReactNode }> = ({ child
       fundingMethod: 'Wire Disbursement',
     };
 
-    setAccounts((prev) =>
+    setAllAccounts((prev) =>
       prev.map((a) =>
         a.id === target.id ? { ...a, balance: a.balance - Math.abs(amount) } : a
       )
     );
-    setTransactions((prev) => [txn, ...prev]);
+    setAllTransactions((prev) => [txn, ...prev]);
 
     return { success: true, message: 'Withdrawal completed', transaction: txn };
   };
@@ -452,7 +536,7 @@ export const BankingProvider: React.FC<{ children: React.ReactNode }> = ({ child
     if (!fromAcct || !toAcct) return { success: false, message: 'Invalid accounts' };
     if (fromAcct.balance < amount) return { success: false, message: 'Insufficient funds' };
 
-    setAccounts((prev) =>
+    setAllAccounts((prev) =>
       prev.map((a) => {
         if (a.id === fromAccountId) return { ...a, balance: a.balance - amount };
         if (a.id === toAccountId) return { ...a, balance: a.balance + amount };
@@ -489,7 +573,7 @@ export const BankingProvider: React.FC<{ children: React.ReactNode }> = ({ child
       destinationAccount: toAcct.name,
     };
 
-    setTransactions((prev) => [txnOut, txnIn, ...prev]);
+    setAllTransactions((prev) => [txnOut, txnIn, ...prev]);
     return { success: true, message: 'Internal transfer completed' };
   };
 
@@ -503,8 +587,12 @@ export const BankingProvider: React.FC<{ children: React.ReactNode }> = ({ child
 
     setUser(null);
     setRegisteredUsers(DEMO_PERSONAS.map((p) => p.user));
-    setAccounts(DEMO_PERSONAS[0].accounts);
-    setTransactions(INITIAL_TRANSACTIONS);
+    setAllAccounts(
+      DEMO_PERSONAS.flatMap((p) =>
+        p.accounts.map((a) => ({ ...a, userId: a.userId || p.user.id }))
+      )
+    );
+    setAllTransactions(INITIAL_TRANSACTIONS);
     setIsAdminMode(false);
   };
 

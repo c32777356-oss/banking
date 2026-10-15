@@ -16,6 +16,7 @@ export const DEMO_PERSONAS: { user: UserSession; accounts: Account[]; cards: Vir
     accounts: [
       {
         id: 'acc_chk_01',
+        userId: 'usr_hiatt_01',
         name: 'Federal Grant Disbursement Account',
         accountNumber: '•••• 4892',
         fullAccountNumber: '8924019284',
@@ -61,6 +62,7 @@ export const DEMO_PERSONAS: { user: UserSession; accounts: Account[]; cards: Vir
     accounts: [
       {
         id: 'acc_chk_02',
+        userId: 'usr_vance_01',
         name: 'Operating Commercial Checking',
         accountNumber: '•••• 7714',
         fullAccountNumber: '8924017714',

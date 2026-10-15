@@ -2,6 +2,7 @@ export type AccountType = 'checking' | 'savings' | 'treasury';
 
 export interface Account {
   id: string;
+  userId?: string;
   name: string;
   accountNumber: string; // e.g. "•••• 4892"
   fullAccountNumber: string;
