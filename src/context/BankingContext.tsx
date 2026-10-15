@@ -60,6 +60,7 @@ interface BankingContextType {
   deleteTransaction: (transactionId: string) => void;
   setAccountBalance: (accountId: string, newBalance: number) => void;
   resetToDemoData: () => void;
+  purgeSiteData: () => void;
 }
 
 const BankingContext = createContext<BankingContextType | undefined>(undefined);
@@ -279,29 +280,43 @@ export const BankingProvider: React.FC<{ children: React.ReactNode }> = ({ child
         const deletedUserIds: string[] = deletedIdsJson ? JSON.parse(deletedIdsJson) : [];
         const deletedUserSet = new Set(deletedUserIds);
 
-        if (firestoreUsers.length > 0) {
-          const userMap = new Map<string, UserSession>();
-          DEMO_PERSONAS.map((p) => p.user).forEach((u) => {
-            if (!deletedUserSet.has(u.id)) userMap.set(u.id, u);
-          });
-          firestoreUsers.forEach((u) => {
-            if (!deletedUserSet.has(u.id)) userMap.set(u.id, u);
-          });
-          setRegisteredUsers(Array.from(userMap.values()));
-        }
+        const userMap = new Map<string, UserSession>();
+        DEMO_PERSONAS.map((p) => p.user).forEach((u) => {
+          if (!deletedUserSet.has(u.id)) userMap.set(u.id, u);
+        });
+        try {
+          const localSaved = localStorage.getItem(STORAGE_KEYS.USERS_LIST);
+          if (localSaved) {
+            const parsedLocal: UserSession[] = JSON.parse(localSaved);
+            parsedLocal.forEach((u) => {
+              if (!deletedUserSet.has(u.id)) userMap.set(u.id, u);
+            });
+          }
+        } catch {}
+        firestoreUsers.forEach((u) => {
+          if (!deletedUserSet.has(u.id)) userMap.set(u.id, u);
+        });
+        setRegisteredUsers(Array.from(userMap.values()));
 
-        if (firestoreAccounts.length > 0) {
-          const accMap = new Map<string, Account>();
-          DEMO_PERSONAS.flatMap((p) =>
-            p.accounts.map((a) => ({ ...a, userId: a.userId || p.user.id }))
-          ).forEach((a) => {
-            if (a.userId && !deletedUserSet.has(a.userId)) accMap.set(a.id, a);
-          });
-          firestoreAccounts.forEach((a) => {
-            if (a.userId && !deletedUserSet.has(a.userId)) accMap.set(a.id, a);
-          });
-          setAllAccounts(Array.from(accMap.values()));
-        }
+        const accMap = new Map<string, Account>();
+        DEMO_PERSONAS.flatMap((p) =>
+          p.accounts.map((a) => ({ ...a, userId: a.userId || p.user.id }))
+        ).forEach((a) => {
+          if (a.userId && !deletedUserSet.has(a.userId)) accMap.set(a.id, a);
+        });
+        try {
+          const localSavedAccs = localStorage.getItem(STORAGE_KEYS.ACCOUNTS);
+          if (localSavedAccs) {
+            const parsedAccs: Account[] = JSON.parse(localSavedAccs);
+            parsedAccs.forEach((a) => {
+              if (a.userId && !deletedUserSet.has(a.userId)) accMap.set(a.id, a);
+            });
+          }
+        } catch {}
+        firestoreAccounts.forEach((a) => {
+          if (a.userId && !deletedUserSet.has(a.userId)) accMap.set(a.id, a);
+        });
+        setAllAccounts(Array.from(accMap.values()) as Account[]);
 
         if (firestoreTxns.length > 0) {
           setAllTransactions(firestoreTxns);
@@ -430,7 +445,7 @@ export const BankingProvider: React.FC<{ children: React.ReactNode }> = ({ child
     }
 
     const matchedRegistered = registeredUsers.find(
-      (u) => u.email.toLowerCase() === email.toLowerCase()
+      (u) => u.email.trim().toLowerCase() === cleanEmail
     );
     if (matchedRegistered) {
       setIsAdminMode(false);
@@ -758,6 +773,26 @@ export const BankingProvider: React.FC<{ children: React.ReactNode }> = ({ child
     setIsAdminMode(false);
   };
 
+  const purgeSiteData = () => {
+    const keysToRemove: string[] = [];
+    for (let i = 0; i < localStorage.length; i++) {
+      const key = localStorage.key(i);
+      if (key && (key.startsWith('aura_bank_') || key.includes('aura'))) {
+        keysToRemove.push(key);
+      }
+    }
+    keysToRemove.forEach((k) => localStorage.removeItem(k));
+    Object.values(STORAGE_KEYS).forEach((k) => localStorage.removeItem(k));
+    localStorage.removeItem('aura_bank_deleted_users');
+    sessionStorage.clear();
+
+    setUser(null);
+    setRegisteredUsers([]);
+    setAllAccounts([]);
+    setAllTransactions([]);
+    setIsAdminMode(false);
+  };
+
   // Compute 30-day metrics
   const now = new Date();
   const thirtyDaysAgo = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
@@ -811,6 +846,7 @@ export const BankingProvider: React.FC<{ children: React.ReactNode }> = ({ child
         addTransaction,
         deleteTransaction,
         resetToDemoData,
+        purgeSiteData,
       }}
     >
       {children}

@@ -37,7 +37,10 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ onExit }) => {
     addTransaction,
     deleteTransaction,
     totalNetWorth,
+    purgeSiteData,
   } = useBanking();
+
+  const [confirmPurge, setConfirmPurge] = useState(false);
 
   const [activeTab, setActiveTab] = useState<'users' | 'accounts' | 'transactions'>('users');
   const [searchQuery, setSearchQuery] = useState('');
@@ -232,12 +235,21 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ onExit }) => {
           </div>
         </div>
 
-        <button
-          onClick={onExit}
-          className="self-start sm:self-center px-4 py-2 text-xs font-semibold rounded-xl bg-white border border-slate-300 text-slate-700 hover:bg-slate-50 transition-colors shadow-2xs"
-        >
-          Exit Admin Console
-        </button>
+        <div className="flex items-center gap-2 self-start sm:self-center">
+          <button
+            onClick={() => setConfirmPurge(true)}
+            className="px-4 py-2 text-xs font-semibold rounded-xl bg-red-50 border border-red-200 text-red-700 hover:bg-red-100 transition-colors shadow-2xs flex items-center gap-1.5"
+          >
+            <Trash2 className="w-3.5 h-3.5" />
+            Purge Site Data
+          </button>
+          <button
+            onClick={onExit}
+            className="px-4 py-2 text-xs font-semibold rounded-xl bg-white border border-slate-300 text-slate-700 hover:bg-slate-50 transition-colors shadow-2xs"
+          >
+            Exit Admin Console
+          </button>
+        </div>
       </div>
 
       {/* Overview Stat Metrics */}
@@ -1089,6 +1101,51 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ onExit }) => {
                 className="flex-1 py-2.5 rounded-xl bg-red-600 hover:bg-red-700 active:scale-[0.98] text-white font-semibold text-xs transition-all shadow-xs"
               >
                 Delete Account
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+      {/* Purge All Site Data Confirmation Modal */}
+      {confirmPurge && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+          <div
+            className="fixed inset-0 bg-slate-900/50 backdrop-blur-xs"
+            onClick={() => setConfirmPurge(false)}
+          />
+          <div className="relative w-full max-w-sm bg-white border border-slate-200 rounded-2xl shadow-2xl p-6 z-10 space-y-4">
+            <div className="w-12 h-12 rounded-full bg-red-100 text-red-600 flex items-center justify-center mx-auto">
+              <Trash2 className="w-6 h-6" />
+            </div>
+
+            <div className="text-center space-y-1.5">
+              <h3 className="font-bold text-slate-900 text-base">Purge Entire Site Data</h3>
+              <p className="text-xs text-slate-600">
+                Are you sure you want to purge all site data and reset to a clean slate?
+              </p>
+              <p className="text-[11px] text-red-600 font-medium pt-1">
+                This will erase all local accounts, registered users, transactions, and session data permanently.
+              </p>
+            </div>
+
+            <div className="flex gap-2 pt-2">
+              <button
+                type="button"
+                onClick={() => setConfirmPurge(false)}
+                className="flex-1 py-2.5 rounded-xl border border-slate-300 text-slate-700 font-medium hover:bg-slate-50 text-xs transition-colors"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  purgeSiteData();
+                  setConfirmPurge(false);
+                  onExit();
+                }}
+                className="flex-1 py-2.5 rounded-xl bg-red-600 hover:bg-red-700 active:scale-[0.98] text-white font-semibold text-xs transition-all shadow-xs"
+              >
+                Purge All Data
               </button>
             </div>
           </div>
