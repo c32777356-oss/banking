@@ -18,8 +18,9 @@ interface ProfileViewProps {
 }
 
 export const ProfileView: React.FC<ProfileViewProps> = ({ onNavigateToAdmin }) => {
-  const { user, accounts } = useBanking();
+  const { user, accounts, isAdminMode } = useBanking();
   const [copiedKey, setCopiedKey] = useState<string | null>(null);
+  const isAdmin = user?.id === 'usr_admin' || isAdminMode;
 
   const primaryAccount = accounts[0];
 
@@ -42,7 +43,7 @@ export const ProfileView: React.FC<ProfileViewProps> = ({ onNavigateToAdmin }) =
           </p>
         </div>
 
-        {onNavigateToAdmin && (
+        {onNavigateToAdmin && isAdmin && (
           <button
             onClick={onNavigateToAdmin}
             className="self-start sm:self-center flex items-center gap-1.5 px-3.5 py-2 text-xs font-semibold rounded-xl bg-indigo-50 hover:bg-indigo-100 text-indigo-700 border border-indigo-200 transition-colors"

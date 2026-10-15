@@ -10,6 +10,8 @@ import { BankingProvider, useBanking } from './context/BankingContext';
 
 const BankingAppContent: React.FC = () => {
   const { user, isAdminMode } = useBanking();
+  const isAdmin = user?.id === 'usr_admin' || isAdminMode;
+
   const [currentTab, setCurrentTab] = useState<NavTab>(() => {
     return user?.id === 'usr_admin' || isAdminMode ? 'admin' : 'dashboard';
   });
@@ -17,6 +19,8 @@ const BankingAppContent: React.FC = () => {
   useEffect(() => {
     if (user?.id === 'usr_admin' || isAdminMode) {
       setCurrentTab('admin');
+    } else if (currentTab === 'admin') {
+      setCurrentTab('dashboard');
     }
   }, [user, isAdminMode]);
 
@@ -53,12 +57,20 @@ const BankingAppContent: React.FC = () => {
     });
   };
 
+  const handleSelectTab = (tab: NavTab) => {
+    if (tab === 'admin' && !isAdmin) {
+      setCurrentTab('dashboard');
+      return;
+    }
+    setCurrentTab(tab);
+  };
+
   return (
     <div className="min-h-screen bg-[#F8FAFD] text-slate-900 flex flex-col font-sans">
       {/* Top Bar Header */}
       <Navbar
         currentTab={currentTab}
-        onSelectTab={setCurrentTab}
+        onSelectTab={handleSelectTab}
         onOpenDeposit={handleOpenDeposit}
         onOpenTransfer={handleOpenTransfer}
       />
@@ -74,10 +86,10 @@ const BankingAppContent: React.FC = () => {
         )}
 
         {currentTab === 'profile' && (
-          <ProfileView onNavigateToAdmin={() => setCurrentTab('admin')} />
+          <ProfileView onNavigateToAdmin={isAdmin ? () => setCurrentTab('admin') : undefined} />
         )}
 
-        {currentTab === 'admin' && (
+        {currentTab === 'admin' && isAdmin && (
           <AdminPanel onExit={() => setCurrentTab('dashboard')} />
         )}
       </main>
@@ -85,7 +97,7 @@ const BankingAppContent: React.FC = () => {
       {/* Mobile Fixed Bottom Navigation Bar (Thumb Zone) */}
       <BottomNav
         currentTab={currentTab}
-        onSelectTab={setCurrentTab}
+        onSelectTab={handleSelectTab}
         onOpenDeposit={handleOpenDeposit}
         onOpenTransfer={handleOpenTransfer}
       />
@@ -94,17 +106,17 @@ const BankingAppContent: React.FC = () => {
       <footer className="no-print mt-auto border-t border-slate-200 bg-white py-6 sm:py-8 text-xs text-slate-500 hidden md:block">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 flex flex-col sm:flex-row items-center justify-between gap-4">
           <div className="flex flex-col sm:flex-row items-center gap-2 sm:gap-4 text-center sm:text-left">
-            <span className="font-semibold text-slate-800">Aura Commercial Bank N.A.</span>
+            <span className="font-semibold text-slate-800">USA Grant Funding</span>
             <span className="hidden sm:inline text-slate-300">·</span>
-            <span>Charter # 021000021</span>
+            <span>Routing # 021000021</span>
             <span className="hidden sm:inline text-slate-300">·</span>
             <span>Equal Housing Lender</span>
             <span className="hidden sm:inline text-slate-300">·</span>
-            <span className="text-blue-700 font-medium">FDIC Certificate #34910</span>
+            <span className="text-blue-700 font-medium">FDIC Insured</span>
           </div>
 
           <div className="text-slate-400 text-[11px] text-center sm:text-right">
-            © 2026 Aura Commercial Bank N.A. All rights reserved.
+            © 2026 USA Grant Funding. All rights reserved.
           </div>
         </div>
       </footer>

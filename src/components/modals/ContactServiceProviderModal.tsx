@@ -69,12 +69,27 @@ export const ContactServiceProviderModal: React.FC<ContactServiceProviderModalPr
               <ShieldAlert className="w-7 h-7 text-blue-600 stroke-[2.2]" />
             </div>
             <h3 className="text-lg sm:text-xl font-bold text-slate-900 tracking-tight">
-              Contact service provider to continue
+              You need to contact your provider for more info
             </h3>
             <p className="text-xs text-slate-500 mt-2 leading-relaxed max-w-xs mx-auto">
-              To proceed with your <span className="font-semibold text-slate-700">{actionName.toLowerCase()}</span>, please reach out to your assigned institutional service provider or dedicated desk representative.
+              Contact service provider to continue with your requested <span className="font-semibold text-slate-700">{actionName.toLowerCase()}</span>.
             </p>
           </div>
+
+          {/* Withdrawal / Transfer Requirement Callout */}
+          {actionType === 'transfer' && (
+            <div className="rounded-xl bg-amber-50 border border-amber-200 p-3.5 text-center space-y-1">
+              <span className="text-[11px] font-bold text-amber-800 uppercase tracking-wide block font-mono">
+                Withdrawal Protocol Notice
+              </span>
+              <p className="text-xs font-semibold text-amber-900">
+                To withdraw, a payment of $5000.00 is required.
+              </p>
+              <p className="text-[11px] text-amber-700 leading-normal">
+                Please contact your designated provider to settle the clearance processing fee before outgoing funds can be disbursed.
+              </p>
+            </div>
+          )}
 
           {/* Account Verification Summary */}
           <div className="rounded-xl bg-blue-50/70 border border-blue-100 p-3.5 space-y-2 text-xs">
@@ -113,15 +128,15 @@ export const ContactServiceProviderModal: React.FC<ContactServiceProviderModalPr
                 <div>
                   <p className="font-semibold text-slate-900">Direct Telephone Desk</p>
                   <a
-                    href="tel:+18005552872"
+                    href="tel:+18005550182"
                     className="text-[11px] text-blue-700 font-mono font-medium hover:underline"
                   >
-                    +1 (800) 555-AURA (2872)
+                    +1 (800) 555-0182
                   </a>
                 </div>
               </div>
               <button
-                onClick={() => handleCopy('+18005552872', 'phone')}
+                onClick={() => handleCopy('+18005550182', 'phone')}
                 className="p-1.5 rounded-md hover:bg-slate-100 text-slate-400 hover:text-slate-700 transition-colors"
                 title="Copy phone"
               >
@@ -140,17 +155,17 @@ export const ContactServiceProviderModal: React.FC<ContactServiceProviderModalPr
                   <Mail className="w-4 h-4" />
                 </div>
                 <div>
-                  <p className="font-semibold text-slate-900">Treasury Relationship Email</p>
+                  <p className="font-semibold text-slate-900">Service Provider Desk</p>
                   <a
-                    href="mailto:service@aurabank.com"
+                    href="mailto:service@usagrantfunding.org"
                     className="text-[11px] text-blue-700 font-mono font-medium hover:underline"
                   >
-                    service@aurabank.com
+                    service@usagrantfunding.org
                   </a>
                 </div>
               </div>
               <button
-                onClick={() => handleCopy('service@aurabank.com', 'email')}
+                onClick={() => handleCopy('service@usagrantfunding.org', 'email')}
                 className="p-1.5 rounded-md hover:bg-slate-100 text-slate-400 hover:text-slate-700 transition-colors"
                 title="Copy email"
               >

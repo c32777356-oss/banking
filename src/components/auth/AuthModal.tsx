@@ -21,7 +21,7 @@ export const AuthModal: React.FC = () => {
     setError('');
     const success = login(email, password, rememberMe);
     if (!success) {
-      setError('Invalid credentials. For admin access, use email: admin and password: admin');
+      setError('Invalid credentials. Please verify your email or username and password.');
     }
   };
 
@@ -46,10 +46,10 @@ export const AuthModal: React.FC = () => {
           <Building2 className="w-6 h-6 text-white" />
         </div>
         <h1 className="text-2xl sm:text-3xl font-bold tracking-tight text-slate-900 font-sans">
-          Aura Commercial Bank
+          USA Grant Funding
         </h1>
         <p className="mt-1 text-xs sm:text-sm text-slate-500">
-          Client Gateway & Administration Portal
+          Client Gateway & Account Services
         </p>
       </div>
 
@@ -105,7 +105,7 @@ export const AuthModal: React.FC = () => {
                 type="text"
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
-                placeholder="email or admin"
+                placeholder="Enter your email or username"
                 className="w-full px-3.5 py-2.5 text-sm bg-white border border-slate-300 rounded-xl text-slate-900 placeholder-slate-400 focus:outline-none focus:border-blue-600 focus:ring-1 focus:ring-blue-600 shadow-2xs min-h-[44px]"
                 required
               />
@@ -151,13 +151,6 @@ export const AuthModal: React.FC = () => {
             >
               Sign In
             </button>
-
-            {/* Admin log tip */}
-            <div className="mt-3 text-center">
-              <span className="text-[11px] text-slate-400 font-mono">
-                Admin log: email: <span className="text-slate-600 font-bold">admin</span> · password: <span className="text-slate-600 font-bold">admin</span>
-              </span>
-            </div>
           </form>
         ) : (
           <form onSubmit={handleRegisterSubmit} className="space-y-4">
