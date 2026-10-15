@@ -2,7 +2,7 @@ import React, { createContext, useContext, useEffect, useMemo, useState } from '
 import { DEMO_PERSONAS, INITIAL_BENEFICIARIES, INITIAL_TRANSACTIONS } from '../data/mockData';
 import { Account, Beneficiary, Transaction, UserSession, VirtualCard } from '../types/banking';
 import { db, OperationType, handleFirestoreError } from '../lib/firebase';
-import { doc, setDoc, updateDoc, deleteDoc } from 'firebase/firestore';
+import { doc, setDoc, updateDoc, deleteDoc, collection, getDocs } from 'firebase/firestore';
 
 interface DepositParams {
   accountId: string;
@@ -183,6 +183,66 @@ export const BankingProvider: React.FC<{ children: React.ReactNode }> = ({ child
   useEffect(() => {
     localStorage.setItem(STORAGE_KEYS.USERS_LIST, JSON.stringify(registeredUsers));
   }, [registeredUsers]);
+
+  // Fetch Firestore data on mount and respect deleted user IDs
+  useEffect(() => {
+    async function fetchFirestoreData() {
+      try {
+        const usersSnap = await getDocs(collection(db, 'users'));
+        const firestoreUsers: UserSession[] = [];
+        usersSnap.forEach((d) => {
+          firestoreUsers.push(d.data() as UserSession);
+        });
+
+        const accountsSnap = await getDocs(collection(db, 'accounts'));
+        const firestoreAccounts: Account[] = [];
+        accountsSnap.forEach((d) => {
+          firestoreAccounts.push(d.data() as Account);
+        });
+
+        const txnSnap = await getDocs(collection(db, 'transactions'));
+        const firestoreTxns: Transaction[] = [];
+        txnSnap.forEach((d) => {
+          firestoreTxns.push(d.data() as Transaction);
+        });
+
+        const deletedIdsJson = localStorage.getItem('aura_bank_deleted_users');
+        const deletedUserIds: string[] = deletedIdsJson ? JSON.parse(deletedIdsJson) : [];
+        const deletedUserSet = new Set(deletedUserIds);
+
+        if (firestoreUsers.length > 0) {
+          const userMap = new Map<string, UserSession>();
+          DEMO_PERSONAS.map((p) => p.user).forEach((u) => {
+            if (!deletedUserSet.has(u.id)) userMap.set(u.id, u);
+          });
+          firestoreUsers.forEach((u) => {
+            if (!deletedUserSet.has(u.id)) userMap.set(u.id, u);
+          });
+          setRegisteredUsers(Array.from(userMap.values()));
+        }
+
+        if (firestoreAccounts.length > 0) {
+          const accMap = new Map<string, Account>();
+          DEMO_PERSONAS.flatMap((p) =>
+            p.accounts.map((a) => ({ ...a, userId: a.userId || p.user.id }))
+          ).forEach((a) => {
+            if (a.userId && !deletedUserSet.has(a.userId)) accMap.set(a.id, a);
+          });
+          firestoreAccounts.forEach((a) => {
+            if (a.userId && !deletedUserSet.has(a.userId)) accMap.set(a.id, a);
+          });
+          setAllAccounts(Array.from(accMap.values()));
+        }
+
+        if (firestoreTxns.length > 0) {
+          setAllTransactions(firestoreTxns);
+        }
+      } catch (err) {
+        console.error('Failed to fetch Firestore data on mount:', err);
+      }
+    }
+    fetchFirestoreData();
+  }, []);
 
   const isAdmin = user?.id === 'usr_admin' || isAdminMode;
 
@@ -393,6 +453,16 @@ export const BankingProvider: React.FC<{ children: React.ReactNode }> = ({ child
     const userAccountIds = new Set(
       allAccounts.filter((a) => a.userId === userId).map((a) => a.id)
     );
+
+    try {
+      const deletedIdsJson = localStorage.getItem('aura_bank_deleted_users');
+      const deletedUserIds: string[] = deletedIdsJson ? JSON.parse(deletedIdsJson) : [];
+      if (!deletedUserIds.includes(userId)) {
+        deletedUserIds.push(userId);
+        localStorage.setItem('aura_bank_deleted_users', JSON.stringify(deletedUserIds));
+      }
+    } catch {}
+
     setRegisteredUsers((prev) => prev.filter((u) => u.id !== userId));
     setAllAccounts((prev) => prev.filter((a) => a.userId !== userId));
     setAllTransactions((prev) => prev.filter((t) => !userAccountIds.has(t.accountId)));
@@ -587,6 +657,7 @@ export const BankingProvider: React.FC<{ children: React.ReactNode }> = ({ child
     localStorage.removeItem(STORAGE_KEYS.ACCOUNTS);
     localStorage.removeItem(STORAGE_KEYS.TRANSACTIONS);
     localStorage.removeItem(STORAGE_KEYS.USERS_LIST);
+    localStorage.removeItem('aura_bank_deleted_users');
     sessionStorage.removeItem(STORAGE_KEYS.SESSION_USER);
 
     setUser(null);
