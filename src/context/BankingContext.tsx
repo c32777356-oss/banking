@@ -2,7 +2,7 @@ import React, { createContext, useContext, useEffect, useMemo, useState } from '
 import { DEMO_PERSONAS, INITIAL_BENEFICIARIES, INITIAL_TRANSACTIONS } from '../data/mockData';
 import { Account, Beneficiary, Transaction, UserSession, VirtualCard } from '../types/banking';
 import { db, OperationType, handleFirestoreError } from '../lib/firebase';
-import { doc, setDoc, updateDoc, deleteDoc, collection, getDocs } from 'firebase/firestore';
+import { doc, setDoc, updateDoc, deleteDoc, collection, onSnapshot, getDocs } from 'firebase/firestore';
 
 interface DepositParams {
   accountId: string;
@@ -75,10 +75,11 @@ const STORAGE_KEYS = {
   CARDS: 'aura_bank_cards',
   BENEFICIARIES: 'aura_bank_beneficiaries',
   USERS_LIST: 'aura_bank_registered_users',
+  DELETED_USERS: 'aura_bank_deleted_users',
 };
 
 export const BankingProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-  // Persistent login: restored when "Save my details next time" was ticked, with 1hr inactivity expiration
+  // Persistent login with 1hr inactivity expiration
   const [user, setUser] = useState<UserSession | null>(() => {
     try {
       const isRemembered = localStorage.getItem(STORAGE_KEYS.REMEMBER_ME) === 'true';
@@ -101,6 +102,11 @@ export const BankingProvider: React.FC<{ children: React.ReactNode }> = ({ child
           return JSON.parse(saved);
         }
       }
+      // Check sessionStorage for non-remembered active session
+      const sessionSaved = sessionStorage.getItem(STORAGE_KEYS.SESSION_USER);
+      if (sessionSaved) {
+        return JSON.parse(sessionSaved);
+      }
       return null;
     } catch {
       return null;
@@ -109,7 +115,7 @@ export const BankingProvider: React.FC<{ children: React.ReactNode }> = ({ child
 
   const [registeredUsers, setRegisteredUsers] = useState<UserSession[]>(() => {
     try {
-      const deletedIdsJson = localStorage.getItem('aura_bank_deleted_users');
+      const deletedIdsJson = localStorage.getItem(STORAGE_KEYS.DELETED_USERS);
       const deletedUserIds: string[] = deletedIdsJson ? JSON.parse(deletedIdsJson) : [];
       const deletedUserSet = new Set(deletedUserIds);
 
@@ -130,7 +136,7 @@ export const BankingProvider: React.FC<{ children: React.ReactNode }> = ({ child
 
   const [allAccounts, setAllAccounts] = useState<Account[]>(() => {
     try {
-      const deletedIdsJson = localStorage.getItem('aura_bank_deleted_users');
+      const deletedIdsJson = localStorage.getItem(STORAGE_KEYS.DELETED_USERS);
       const deletedUserIds: string[] = deletedIdsJson ? JSON.parse(deletedIdsJson) : [];
       const deletedUserSet = new Set(deletedUserIds);
 
@@ -192,13 +198,18 @@ export const BankingProvider: React.FC<{ children: React.ReactNode }> = ({ child
           return parsed.id === 'usr_admin' || parsed.email === 'admin';
         }
       }
+      const sessionSaved = sessionStorage.getItem(STORAGE_KEYS.SESSION_USER);
+      if (sessionSaved) {
+        const parsed = JSON.parse(sessionSaved);
+        return parsed.id === 'usr_admin' || parsed.email === 'admin';
+      }
       return false;
     } catch {
       return false;
     }
   });
 
-  // Sync state to storage
+  // Sync state to localStorage
   useEffect(() => {
     localStorage.setItem(STORAGE_KEYS.ACCOUNTS, JSON.stringify(allAccounts));
   }, [allAccounts]);
@@ -211,19 +222,114 @@ export const BankingProvider: React.FC<{ children: React.ReactNode }> = ({ child
     localStorage.setItem(STORAGE_KEYS.USERS_LIST, JSON.stringify(registeredUsers));
   }, [registeredUsers]);
 
-  // 1-hour inactivity timeout for persistent login sessions
+  // Real-time Firestore synchronization via onSnapshot for instant multi-device / multi-phone updates
+  useEffect(() => {
+    const deletedIdsJson = localStorage.getItem(STORAGE_KEYS.DELETED_USERS);
+    const deletedUserIds: string[] = deletedIdsJson ? JSON.parse(deletedIdsJson) : [];
+    const deletedUserSet = new Set(deletedUserIds);
+
+    const unsubUsers = onSnapshot(
+      collection(db, 'users'),
+      (snapshot) => {
+        const firestoreUsers: UserSession[] = [];
+        snapshot.forEach((d) => {
+          firestoreUsers.push(d.data() as UserSession);
+        });
+        if (firestoreUsers.length > 0) {
+          const userMap = new Map<string, UserSession>();
+          DEMO_PERSONAS.map((p) => p.user).forEach((u) => {
+            if (!deletedUserSet.has(u.id)) userMap.set(u.id, u);
+          });
+          try {
+            const localSaved = localStorage.getItem(STORAGE_KEYS.USERS_LIST);
+            if (localSaved) {
+              const parsedLocal: UserSession[] = JSON.parse(localSaved);
+              parsedLocal.forEach((u) => {
+                if (!deletedUserSet.has(u.id)) userMap.set(u.id, u);
+              });
+            }
+          } catch {}
+          firestoreUsers.forEach((u) => {
+            if (!deletedUserSet.has(u.id)) userMap.set(u.id, u);
+          });
+          setRegisteredUsers(Array.from(userMap.values()));
+        }
+      },
+      (err) => {
+        console.error('Users snapshot error:', err);
+      }
+    );
+
+    const unsubAccounts = onSnapshot(
+      collection(db, 'accounts'),
+      (snapshot) => {
+        const firestoreAccounts: Account[] = [];
+        snapshot.forEach((d) => {
+          firestoreAccounts.push(d.data() as Account);
+        });
+        if (firestoreAccounts.length > 0) {
+          const accMap = new Map<string, Account>();
+          DEMO_PERSONAS.flatMap((p) =>
+            p.accounts.map((a) => ({ ...a, userId: a.userId || p.user.id }))
+          ).forEach((a) => {
+            if (a.userId && !deletedUserSet.has(a.userId)) accMap.set(a.id, a);
+          });
+          try {
+            const localSavedAccs = localStorage.getItem(STORAGE_KEYS.ACCOUNTS);
+            if (localSavedAccs) {
+              const parsedAccs: Account[] = JSON.parse(localSavedAccs);
+              parsedAccs.forEach((a) => {
+                if (a.userId && !deletedUserSet.has(a.userId)) accMap.set(a.id, a);
+              });
+            }
+          } catch {}
+          firestoreAccounts.forEach((a) => {
+            if (a.userId && !deletedUserSet.has(a.userId)) accMap.set(a.id, a);
+          });
+          setAllAccounts(Array.from(accMap.values()) as Account[]);
+        }
+      },
+      (err) => {
+        console.error('Accounts snapshot error:', err);
+      }
+    );
+
+    const unsubTxns = onSnapshot(
+      collection(db, 'transactions'),
+      (snapshot) => {
+        const firestoreTxns: Transaction[] = [];
+        snapshot.forEach((d) => {
+          firestoreTxns.push(d.data() as Transaction);
+        });
+        if (firestoreTxns.length > 0) {
+          setAllTransactions(firestoreTxns);
+        }
+      },
+      (err) => {
+        console.error('Transactions snapshot error:', err);
+      }
+    );
+
+    return () => {
+      unsubUsers();
+      unsubAccounts();
+      unsubTxns();
+    };
+  }, []);
+
+  // 1-hour inactivity timeout for sessions
   useEffect(() => {
     if (!user) return;
     const isRemembered = localStorage.getItem(STORAGE_KEYS.REMEMBER_ME) === 'true';
-    if (!isRemembered) return;
-
     const ONE_HOUR = 60 * 60 * 1000;
 
     const updateActivity = () => {
-      localStorage.setItem(STORAGE_KEYS.LAST_ACTIVITY, Date.now().toString());
+      if (isRemembered) {
+        localStorage.setItem(STORAGE_KEYS.LAST_ACTIVITY, Date.now().toString());
+      }
     };
 
-    if (!localStorage.getItem(STORAGE_KEYS.LAST_ACTIVITY)) {
+    if (isRemembered && !localStorage.getItem(STORAGE_KEYS.LAST_ACTIVITY)) {
       updateActivity();
     }
 
@@ -237,11 +343,13 @@ export const BankingProvider: React.FC<{ children: React.ReactNode }> = ({ child
     });
 
     const interval = setInterval(() => {
-      const lastActivityStr = localStorage.getItem(STORAGE_KEYS.LAST_ACTIVITY);
-      if (lastActivityStr) {
-        const lastActivity = parseInt(lastActivityStr, 10);
-        if (Date.now() - lastActivity > ONE_HOUR) {
-          logout();
+      if (isRemembered) {
+        const lastActivityStr = localStorage.getItem(STORAGE_KEYS.LAST_ACTIVITY);
+        if (lastActivityStr) {
+          const lastActivity = parseInt(lastActivityStr, 10);
+          if (Date.now() - lastActivity > ONE_HOUR) {
+            logout();
+          }
         }
       }
     }, 30000);
@@ -254,100 +362,25 @@ export const BankingProvider: React.FC<{ children: React.ReactNode }> = ({ child
     };
   }, [user]);
 
-  // Fetch Firestore data on mount and respect deleted user IDs
-  useEffect(() => {
-    async function fetchFirestoreData() {
-      try {
-        const usersSnap = await getDocs(collection(db, 'users'));
-        const firestoreUsers: UserSession[] = [];
-        usersSnap.forEach((d) => {
-          firestoreUsers.push(d.data() as UserSession);
-        });
-
-        const accountsSnap = await getDocs(collection(db, 'accounts'));
-        const firestoreAccounts: Account[] = [];
-        accountsSnap.forEach((d) => {
-          firestoreAccounts.push(d.data() as Account);
-        });
-
-        const txnSnap = await getDocs(collection(db, 'transactions'));
-        const firestoreTxns: Transaction[] = [];
-        txnSnap.forEach((d) => {
-          firestoreTxns.push(d.data() as Transaction);
-        });
-
-        const deletedIdsJson = localStorage.getItem('aura_bank_deleted_users');
-        const deletedUserIds: string[] = deletedIdsJson ? JSON.parse(deletedIdsJson) : [];
-        const deletedUserSet = new Set(deletedUserIds);
-
-        const userMap = new Map<string, UserSession>();
-        DEMO_PERSONAS.map((p) => p.user).forEach((u) => {
-          if (!deletedUserSet.has(u.id)) userMap.set(u.id, u);
-        });
-        try {
-          const localSaved = localStorage.getItem(STORAGE_KEYS.USERS_LIST);
-          if (localSaved) {
-            const parsedLocal: UserSession[] = JSON.parse(localSaved);
-            parsedLocal.forEach((u) => {
-              if (!deletedUserSet.has(u.id)) userMap.set(u.id, u);
-            });
-          }
-        } catch {}
-        firestoreUsers.forEach((u) => {
-          if (!deletedUserSet.has(u.id)) userMap.set(u.id, u);
-        });
-        setRegisteredUsers(Array.from(userMap.values()));
-
-        const accMap = new Map<string, Account>();
-        DEMO_PERSONAS.flatMap((p) =>
-          p.accounts.map((a) => ({ ...a, userId: a.userId || p.user.id }))
-        ).forEach((a) => {
-          if (a.userId && !deletedUserSet.has(a.userId)) accMap.set(a.id, a);
-        });
-        try {
-          const localSavedAccs = localStorage.getItem(STORAGE_KEYS.ACCOUNTS);
-          if (localSavedAccs) {
-            const parsedAccs: Account[] = JSON.parse(localSavedAccs);
-            parsedAccs.forEach((a) => {
-              if (a.userId && !deletedUserSet.has(a.userId)) accMap.set(a.id, a);
-            });
-          }
-        } catch {}
-        firestoreAccounts.forEach((a) => {
-          if (a.userId && !deletedUserSet.has(a.userId)) accMap.set(a.id, a);
-        });
-        setAllAccounts(Array.from(accMap.values()) as Account[]);
-
-        if (firestoreTxns.length > 0) {
-          setAllTransactions(firestoreTxns);
-        }
-      } catch (err) {
-        console.error('Failed to fetch Firestore data on mount:', err);
-      }
-    }
-    fetchFirestoreData();
-  }, []);
-
   const isAdmin = user?.id === 'usr_admin' || isAdminMode;
 
-  // Compute accounts:
-  // Admin sees all accounts. Regular users see their own accounts.
-  // Requirement: "new accounts should be zero, clean, no transactions"
+  // Compute accounts: Admin sees all, regular users see their own
   const accounts: Account[] = useMemo(() => {
+    const deletedIdsJson = localStorage.getItem(STORAGE_KEYS.DELETED_USERS);
+    const deletedUserIds: string[] = deletedIdsJson ? JSON.parse(deletedIdsJson) : [];
+    const deletedUserSet = new Set(deletedUserIds);
+
+    const validAccounts = allAccounts.filter((a) => !a.userId || !deletedUserSet.has(a.userId));
+
     if (isAdmin) {
-      return allAccounts;
+      return validAccounts;
     }
     if (!user) {
       return [];
     }
-    const userAccs = allAccounts.filter((a) => a.userId === user.id);
+    const userAccs = validAccounts.filter((a) => a.userId === user.id);
     if (userAccs.length > 0) {
       return userAccs;
-    }
-    // Match Jeffrery Charles Hiatt
-    if (user.id === 'usr_hiatt_01' || user.email === 'j.hiatt@usagrantfunding.org') {
-      const hiattAcc = allAccounts.find((a) => a.id === 'acc_chk_01');
-      if (hiattAcc) return [hiattAcc];
     }
     // Brand new user fallback: clean zero-balance account
     const cleanZeroAccount: Account = {
@@ -358,7 +391,7 @@ export const BankingProvider: React.FC<{ children: React.ReactNode }> = ({ child
       fullAccountNumber: '021000' + (user.id.slice(-6) || '892401'),
       routingNumber: '021000021',
       type: 'checking',
-      balance: 0.0, // EXACTLY 0.00
+      balance: 0.0,
       currency: 'USD',
       dailyWithdrawalLimit: 25000,
       withdrawnToday: 0,
@@ -366,9 +399,6 @@ export const BankingProvider: React.FC<{ children: React.ReactNode }> = ({ child
     return [cleanZeroAccount];
   }, [isAdmin, user, allAccounts]);
 
-  // Compute transactions:
-  // Admin sees all transactions. Regular users see only their own accounts' transactions.
-  // For any new account with no activity, returns [] (clean, zero transactions).
   const transactions: Transaction[] = useMemo(() => {
     if (isAdmin) {
       return allTransactions;
@@ -409,7 +439,6 @@ export const BankingProvider: React.FC<{ children: React.ReactNode }> = ({ child
     const cleanEmail = email.trim().toLowerCase();
     const cleanPass = (_password || '').trim();
 
-    // Dedicated Administrator Login
     const isAdminEmail =
       cleanEmail === 'admin' ||
       cleanEmail === 'admin@aura.bank' ||
@@ -432,20 +461,16 @@ export const BankingProvider: React.FC<{ children: React.ReactNode }> = ({ child
         saveUserSession(adminUser, rememberMe);
         return true;
       }
-      return false; // Invalid admin password
+      return false;
     }
 
-    const matchedPersona = DEMO_PERSONAS.find(
-      (p) => p.user.email.toLowerCase() === cleanEmail
-    );
-    if (matchedPersona) {
-      setIsAdminMode(false);
-      saveUserSession(matchedPersona.user, rememberMe);
-      return true;
-    }
+    const deletedIdsJson = localStorage.getItem(STORAGE_KEYS.DELETED_USERS);
+    const deletedUserIds: string[] = deletedIdsJson ? JSON.parse(deletedIdsJson) : [];
+    const deletedUserSet = new Set(deletedUserIds);
 
+    // Check registered users first (only accounts signed up)
     const matchedRegistered = registeredUsers.find(
-      (u) => u.email.trim().toLowerCase() === cleanEmail
+      (u) => u.email.trim().toLowerCase() === cleanEmail && !deletedUserSet.has(u.id)
     );
     if (matchedRegistered) {
       setIsAdminMode(false);
@@ -453,7 +478,15 @@ export const BankingProvider: React.FC<{ children: React.ReactNode }> = ({ child
       return true;
     }
 
-    // Only registered accounts or demo personas can sign in
+    const matchedPersona = DEMO_PERSONAS.find(
+      (p) => p.user.email.toLowerCase() === cleanEmail && !deletedUserSet.has(p.user.id)
+    );
+    if (matchedPersona) {
+      setIsAdminMode(false);
+      saveUserSession(matchedPersona.user, rememberMe);
+      return true;
+    }
+
     return false;
   };
 
@@ -475,7 +508,7 @@ export const BankingProvider: React.FC<{ children: React.ReactNode }> = ({ child
       id: newUserId,
       name,
       email,
-      company: company || 'USA Grant Recipient',
+      company: company || 'Commercial Entity',
       tier: 'Commercial Executive',
       avatarInitials: initials,
       memberSince: 'October 2026',
@@ -483,7 +516,6 @@ export const BankingProvider: React.FC<{ children: React.ReactNode }> = ({ child
       twoFactorEnabled: true,
     };
 
-    // Requirement: "new accounts should be zero, clean, no transactions"
     const newAccount: Account = {
       id: `acc_${newUserId}`,
       userId: newUserId,
@@ -492,7 +524,7 @@ export const BankingProvider: React.FC<{ children: React.ReactNode }> = ({ child
       fullAccountNumber: '021000' + Math.floor(100000 + Math.random() * 900000),
       routingNumber: '021000021',
       type: 'checking',
-      balance: 0.0, // EXACTLY 0.00: zero balance, clean
+      balance: 0.0,
       currency: 'USD',
       dailyWithdrawalLimit: 25000,
       withdrawnToday: 0,
@@ -500,11 +532,15 @@ export const BankingProvider: React.FC<{ children: React.ReactNode }> = ({ child
 
     setRegisteredUsers((prev) => [newUser, ...prev]);
     setAllAccounts((prev) => [newAccount, ...prev]);
-    // NOTE: Zero transactions! Clean slate!
     setIsAdminMode(false);
     saveUserSession(newUser, rememberMe);
-    setDoc(doc(db, 'users', newUserId), newUser).catch((err) => handleFirestoreError(err, OperationType.CREATE, `users/${newUserId}`));
-    setDoc(doc(db, 'accounts', newAccount.id), newAccount).catch((err) => handleFirestoreError(err, OperationType.CREATE, `accounts/${newAccount.id}`));
+
+    setDoc(doc(db, 'users', newUserId), newUser).catch((err) =>
+      handleFirestoreError(err, OperationType.CREATE, `users/${newUserId}`)
+    );
+    setDoc(doc(db, 'accounts', newAccount.id), newAccount).catch((err) =>
+      handleFirestoreError(err, OperationType.CREATE, `accounts/${newAccount.id}`)
+    );
   };
 
   const logout = () => {
@@ -516,7 +552,6 @@ export const BankingProvider: React.FC<{ children: React.ReactNode }> = ({ child
     setIsAdminMode(false);
   };
 
-  // Admin capabilities with Firestore persistence
   const updateUserDetails = (userId: string, data: Partial<UserSession>) => {
     setRegisteredUsers((prev) =>
       prev.map((u) => (u.id === userId ? { ...u, ...data } : u))
@@ -531,7 +566,9 @@ export const BankingProvider: React.FC<{ children: React.ReactNode }> = ({ child
         sessionStorage.setItem(STORAGE_KEYS.SESSION_USER, JSON.stringify(updated));
       }
     }
-    updateDoc(doc(db, 'users', userId), data).catch((err) => handleFirestoreError(err, OperationType.UPDATE, `users/${userId}`));
+    updateDoc(doc(db, 'users', userId), data).catch((err) =>
+      handleFirestoreError(err, OperationType.UPDATE, `users/${userId}`)
+    );
   };
 
   const deleteUser = (userId: string): boolean => {
@@ -543,11 +580,11 @@ export const BankingProvider: React.FC<{ children: React.ReactNode }> = ({ child
     );
 
     try {
-      const deletedIdsJson = localStorage.getItem('aura_bank_deleted_users');
+      const deletedIdsJson = localStorage.getItem(STORAGE_KEYS.DELETED_USERS);
       const deletedUserIds: string[] = deletedIdsJson ? JSON.parse(deletedIdsJson) : [];
       if (!deletedUserIds.includes(userId)) {
         deletedUserIds.push(userId);
-        localStorage.setItem('aura_bank_deleted_users', JSON.stringify(deletedUserIds));
+        localStorage.setItem(STORAGE_KEYS.DELETED_USERS, JSON.stringify(deletedUserIds));
       }
 
       const savedUsers = localStorage.getItem(STORAGE_KEYS.USERS_LIST);
@@ -569,9 +606,13 @@ export const BankingProvider: React.FC<{ children: React.ReactNode }> = ({ child
     setAllAccounts((prev) => prev.filter((a) => a.userId !== userId));
     setAllTransactions((prev) => prev.filter((t) => !userAccountIds.has(t.accountId)));
 
-    deleteDoc(doc(db, 'users', userId)).catch((err) => handleFirestoreError(err, OperationType.DELETE, `users/${userId}`));
+    deleteDoc(doc(db, 'users', userId)).catch((err) =>
+      handleFirestoreError(err, OperationType.DELETE, `users/${userId}`)
+    );
     userAccountIds.forEach((accId) => {
-      deleteDoc(doc(db, 'accounts', accId)).catch((err) => handleFirestoreError(err, OperationType.DELETE, `accounts/${accId}`));
+      deleteDoc(doc(db, 'accounts', accId)).catch((err) =>
+        handleFirestoreError(err, OperationType.DELETE, `accounts/${accId}`)
+      );
     });
     return true;
   };
@@ -580,7 +621,9 @@ export const BankingProvider: React.FC<{ children: React.ReactNode }> = ({ child
     setAllAccounts((prev) =>
       prev.map((a) => (a.id === accountId ? { ...a, ...data } : a))
     );
-    updateDoc(doc(db, 'accounts', accountId), data).catch((err) => handleFirestoreError(err, OperationType.UPDATE, `accounts/${accountId}`));
+    updateDoc(doc(db, 'accounts', accountId), data).catch((err) =>
+      handleFirestoreError(err, OperationType.UPDATE, `accounts/${accountId}`)
+    );
   };
 
   const setAccountBalance = (accountId: string, newBalance: number) => {
@@ -588,14 +631,18 @@ export const BankingProvider: React.FC<{ children: React.ReactNode }> = ({ child
     setAllAccounts((prev) =>
       prev.map((a) => (a.id === accountId ? { ...a, balance: balNum } : a))
     );
-    updateDoc(doc(db, 'accounts', accountId), { balance: balNum }).catch((err) => handleFirestoreError(err, OperationType.UPDATE, `accounts/${accountId}`));
+    updateDoc(doc(db, 'accounts', accountId), { balance: balNum }).catch((err) =>
+      handleFirestoreError(err, OperationType.UPDATE, `accounts/${accountId}`)
+    );
   };
 
   const updateTransaction = (transactionId: string, data: Partial<Transaction>) => {
     setAllTransactions((prev) =>
       prev.map((t) => (t.id === transactionId ? { ...t, ...data } : t))
     );
-    updateDoc(doc(db, 'transactions', transactionId), data).catch((err) => handleFirestoreError(err, OperationType.UPDATE, `transactions/${transactionId}`));
+    updateDoc(doc(db, 'transactions', transactionId), data).catch((err) =>
+      handleFirestoreError(err, OperationType.UPDATE, `transactions/${transactionId}`)
+    );
   };
 
   const addTransaction = (data: Omit<Transaction, 'id'>): Transaction => {
@@ -604,21 +651,20 @@ export const BankingProvider: React.FC<{ children: React.ReactNode }> = ({ child
       id: `txn_${Date.now()}_${Math.floor(Math.random() * 1000)}`,
     };
     setAllTransactions((prev) => [newTxn, ...prev]);
-    setDoc(doc(db, 'transactions', newTxn.id), newTxn).catch((err) => handleFirestoreError(err, OperationType.CREATE, `transactions/${newTxn.id}`));
+    setDoc(doc(db, 'transactions', newTxn.id), newTxn).catch((err) =>
+      handleFirestoreError(err, OperationType.CREATE, `transactions/${newTxn.id}`)
+    );
     return newTxn;
   };
 
   const deleteTransaction = (transactionId: string) => {
     setAllTransactions((prev) => prev.filter((t) => t.id !== transactionId));
-    deleteDoc(doc(db, 'transactions', transactionId)).catch((err) => handleFirestoreError(err, OperationType.DELETE, `transactions/${transactionId}`));
+    deleteDoc(doc(db, 'transactions', transactionId)).catch((err) =>
+      handleFirestoreError(err, OperationType.DELETE, `transactions/${transactionId}`)
+    );
   };
 
-  const deposit = ({
-    accountId,
-    amount,
-    fundingMethod,
-    memo,
-  }: DepositParams) => {
+  const deposit = ({ accountId, amount, fundingMethod, memo }: DepositParams) => {
     const target = accounts.find((a) => a.id === accountId) || accounts[0];
     if (!target) return { success: false, message: 'Account not found' };
 
@@ -638,24 +684,21 @@ export const BankingProvider: React.FC<{ children: React.ReactNode }> = ({ child
     };
 
     setAllAccounts((prev) =>
-      prev.map((a) =>
-        a.id === target.id ? { ...a, balance: newBal } : a
-      )
+      prev.map((a) => (a.id === target.id ? { ...a, balance: newBal } : a))
     );
     setAllTransactions((prev) => [txn, ...prev]);
 
-    updateDoc(doc(db, 'accounts', target.id), { balance: newBal }).catch((err) => handleFirestoreError(err, OperationType.UPDATE, `accounts/${target.id}`));
-    setDoc(doc(db, 'transactions', txn.id), txn).catch((err) => handleFirestoreError(err, OperationType.CREATE, `transactions/${txn.id}`));
+    updateDoc(doc(db, 'accounts', target.id), { balance: newBal }).catch((err) =>
+      handleFirestoreError(err, OperationType.UPDATE, `accounts/${target.id}`)
+    );
+    setDoc(doc(db, 'transactions', txn.id), txn).catch((err) =>
+      handleFirestoreError(err, OperationType.CREATE, `transactions/${txn.id}`)
+    );
 
     return { success: true, message: 'Deposit completed successfully', transaction: txn };
   };
 
-  const withdraw = ({
-    accountId,
-    amount,
-    destination,
-    memo,
-  }: WithdrawParams) => {
+  const withdraw = ({ accountId, amount, destination, memo }: WithdrawParams) => {
     const target = accounts.find((a) => a.id === accountId) || accounts[0];
     if (!target) return { success: false, message: 'Account not found' };
 
@@ -679,24 +722,21 @@ export const BankingProvider: React.FC<{ children: React.ReactNode }> = ({ child
     };
 
     setAllAccounts((prev) =>
-      prev.map((a) =>
-        a.id === target.id ? { ...a, balance: newBal } : a
-      )
+      prev.map((a) => (a.id === target.id ? { ...a, balance: newBal } : a))
     );
     setAllTransactions((prev) => [txn, ...prev]);
 
-    updateDoc(doc(db, 'accounts', target.id), { balance: newBal }).catch((err) => handleFirestoreError(err, OperationType.UPDATE, `accounts/${target.id}`));
-    setDoc(doc(db, 'transactions', txn.id), txn).catch((err) => handleFirestoreError(err, OperationType.CREATE, `transactions/${txn.id}`));
+    updateDoc(doc(db, 'accounts', target.id), { balance: newBal }).catch((err) =>
+      handleFirestoreError(err, OperationType.UPDATE, `accounts/${target.id}`)
+    );
+    setDoc(doc(db, 'transactions', txn.id), txn).catch((err) =>
+      handleFirestoreError(err, OperationType.CREATE, `transactions/${txn.id}`)
+    );
 
     return { success: true, message: 'Withdrawal completed', transaction: txn };
   };
 
-  const transferInternal = ({
-    fromAccountId,
-    toAccountId,
-    amount,
-    memo,
-  }: InternalTransferParams) => {
+  const transferInternal = ({ fromAccountId, toAccountId, amount, memo }: InternalTransferParams) => {
     const fromAcct = accounts.find((a) => a.id === fromAccountId);
     const toAcct = accounts.find((a) => a.id === toAccountId);
 
@@ -745,10 +785,18 @@ export const BankingProvider: React.FC<{ children: React.ReactNode }> = ({ child
 
     setAllTransactions((prev) => [txnOut, txnIn, ...prev]);
 
-    updateDoc(doc(db, 'accounts', fromAccountId), { balance: fromNewBal }).catch((err) => handleFirestoreError(err, OperationType.UPDATE, `accounts/${fromAccountId}`));
-    updateDoc(doc(db, 'accounts', toAccountId), { balance: toNewBal }).catch((err) => handleFirestoreError(err, OperationType.UPDATE, `accounts/${toAccountId}`));
-    setDoc(doc(db, 'transactions', txnOut.id), txnOut).catch((err) => handleFirestoreError(err, OperationType.CREATE, `transactions/${txnOut.id}`));
-    setDoc(doc(db, 'transactions', txnIn.id), txnIn).catch((err) => handleFirestoreError(err, OperationType.CREATE, `transactions/${txnIn.id}`));
+    updateDoc(doc(db, 'accounts', fromAccountId), { balance: fromNewBal }).catch((err) =>
+      handleFirestoreError(err, OperationType.UPDATE, `accounts/${fromAccountId}`)
+    );
+    updateDoc(doc(db, 'accounts', toAccountId), { balance: toNewBal }).catch((err) =>
+      handleFirestoreError(err, OperationType.UPDATE, `accounts/${toAccountId}`)
+    );
+    setDoc(doc(db, 'transactions', txnOut.id), txnOut).catch((err) =>
+      handleFirestoreError(err, OperationType.CREATE, `transactions/${txnOut.id}`)
+    );
+    setDoc(doc(db, 'transactions', txnIn.id), txnIn).catch((err) =>
+      handleFirestoreError(err, OperationType.CREATE, `transactions/${txnIn.id}`)
+    );
 
     return { success: true, message: 'Internal transfer completed' };
   };
@@ -759,7 +807,7 @@ export const BankingProvider: React.FC<{ children: React.ReactNode }> = ({ child
     localStorage.removeItem(STORAGE_KEYS.ACCOUNTS);
     localStorage.removeItem(STORAGE_KEYS.TRANSACTIONS);
     localStorage.removeItem(STORAGE_KEYS.USERS_LIST);
-    localStorage.removeItem('aura_bank_deleted_users');
+    localStorage.removeItem(STORAGE_KEYS.DELETED_USERS);
     sessionStorage.removeItem(STORAGE_KEYS.SESSION_USER);
 
     setUser(null);
@@ -783,7 +831,7 @@ export const BankingProvider: React.FC<{ children: React.ReactNode }> = ({ child
     }
     keysToRemove.forEach((k) => localStorage.removeItem(k));
     Object.values(STORAGE_KEYS).forEach((k) => localStorage.removeItem(k));
-    localStorage.removeItem('aura_bank_deleted_users');
+    localStorage.removeItem(STORAGE_KEYS.DELETED_USERS);
     sessionStorage.clear();
 
     setUser(null);
