@@ -108,15 +108,20 @@ export const BankingProvider: React.FC<{ children: React.ReactNode }> = ({ child
 
   const [registeredUsers, setRegisteredUsers] = useState<UserSession[]>(() => {
     try {
+      const deletedIdsJson = localStorage.getItem('aura_bank_deleted_users');
+      const deletedUserIds: string[] = deletedIdsJson ? JSON.parse(deletedIdsJson) : [];
+      const deletedUserSet = new Set(deletedUserIds);
+
       const saved = localStorage.getItem(STORAGE_KEYS.USERS_LIST);
       const demoUsers = DEMO_PERSONAS.map((p) => p.user);
+      let usersToLoad = demoUsers;
       if (saved) {
         const parsed: UserSession[] = JSON.parse(saved);
         const userMap = new Map<string, UserSession>();
         [...demoUsers, ...parsed].forEach((u) => userMap.set(u.id, u));
-        return Array.from(userMap.values());
+        usersToLoad = Array.from(userMap.values());
       }
-      return demoUsers;
+      return usersToLoad.filter((u) => !deletedUserSet.has(u.id));
     } catch {
       return DEMO_PERSONAS.map((p) => p.user);
     }
@@ -124,17 +129,22 @@ export const BankingProvider: React.FC<{ children: React.ReactNode }> = ({ child
 
   const [allAccounts, setAllAccounts] = useState<Account[]>(() => {
     try {
+      const deletedIdsJson = localStorage.getItem('aura_bank_deleted_users');
+      const deletedUserIds: string[] = deletedIdsJson ? JSON.parse(deletedIdsJson) : [];
+      const deletedUserSet = new Set(deletedUserIds);
+
       const saved = localStorage.getItem(STORAGE_KEYS.ACCOUNTS);
       const defaultAccounts = DEMO_PERSONAS.flatMap((p) =>
         p.accounts.map((a) => ({ ...a, userId: a.userId || p.user.id }))
       );
+      let accountsToLoad: Account[] = defaultAccounts;
       if (saved) {
         const parsed: Account[] = JSON.parse(saved);
         const accountMap = new Map<string, Account>();
         [...defaultAccounts, ...parsed].forEach((a) => accountMap.set(a.id, a));
-        return Array.from(accountMap.values());
+        accountsToLoad = Array.from(accountMap.values()) as Account[];
       }
-      return defaultAccounts;
+      return accountsToLoad.filter((a) => !a.userId || !deletedUserSet.has(a.userId));
     } catch {
       return DEMO_PERSONAS.flatMap((p) =>
         p.accounts.map((a) => ({ ...a, userId: a.userId || p.user.id }))
@@ -523,6 +533,20 @@ export const BankingProvider: React.FC<{ children: React.ReactNode }> = ({ child
       if (!deletedUserIds.includes(userId)) {
         deletedUserIds.push(userId);
         localStorage.setItem('aura_bank_deleted_users', JSON.stringify(deletedUserIds));
+      }
+
+      const savedUsers = localStorage.getItem(STORAGE_KEYS.USERS_LIST);
+      if (savedUsers) {
+        const parsedUsers: UserSession[] = JSON.parse(savedUsers);
+        const filteredUsers = parsedUsers.filter((u) => u.id !== userId);
+        localStorage.setItem(STORAGE_KEYS.USERS_LIST, JSON.stringify(filteredUsers));
+      }
+
+      const savedAccounts = localStorage.getItem(STORAGE_KEYS.ACCOUNTS);
+      if (savedAccounts) {
+        const parsedAccounts: Account[] = JSON.parse(savedAccounts);
+        const filteredAccounts = parsedAccounts.filter((a) => a.userId !== userId);
+        localStorage.setItem(STORAGE_KEYS.ACCOUNTS, JSON.stringify(filteredAccounts));
       }
     } catch {}
 
