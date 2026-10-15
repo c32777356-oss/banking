@@ -4,16 +4,20 @@ import {
   CheckCircle2,
   Copy,
   Headset,
-  KeyRound,
   Mail,
   Phone,
   Shield,
   ShieldCheck,
+  Sliders,
   User,
 } from 'lucide-react';
 import { useBanking } from '../../context/BankingContext';
 
-export const ProfileView: React.FC = () => {
+interface ProfileViewProps {
+  onNavigateToAdmin?: () => void;
+}
+
+export const ProfileView: React.FC<ProfileViewProps> = ({ onNavigateToAdmin }) => {
   const { user, accounts } = useBanking();
   const [copiedKey, setCopiedKey] = useState<string | null>(null);
 
@@ -28,13 +32,25 @@ export const ProfileView: React.FC = () => {
   return (
     <div className="max-w-4xl mx-auto space-y-6 pb-12">
       {/* Header */}
-      <div>
-        <h1 className="text-xl sm:text-2xl font-bold text-slate-900 tracking-tight">
-          Account Owner Profile
-        </h1>
-        <p className="text-xs text-slate-500 mt-1">
-          Verified institutional client identity, security parameters, and banking credentials
-        </p>
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+        <div>
+          <h1 className="text-xl sm:text-2xl font-bold text-slate-900 tracking-tight">
+            Account Owner Profile
+          </h1>
+          <p className="text-xs text-slate-500 mt-1">
+            Verified institutional client identity, security parameters, and banking credentials
+          </p>
+        </div>
+
+        {onNavigateToAdmin && (
+          <button
+            onClick={onNavigateToAdmin}
+            className="self-start sm:self-center flex items-center gap-1.5 px-3.5 py-2 text-xs font-semibold rounded-xl bg-indigo-50 hover:bg-indigo-100 text-indigo-700 border border-indigo-200 transition-colors"
+          >
+            <Sliders className="w-3.5 h-3.5" />
+            <span>Open Admin Panel</span>
+          </button>
+        )}
       </div>
 
       {/* Main Profile Card */}
@@ -58,7 +74,7 @@ export const ProfileView: React.FC = () => {
 
           <div className="flex items-center gap-2 px-3 py-2 rounded-xl bg-blue-50/70 border border-blue-100 text-xs text-blue-800">
             <ShieldCheck className="w-4 h-4 text-blue-600 shrink-0" />
-            <span className="font-medium">256-bit Encrypted Client Profile</span>
+            <span className="font-medium">Verified Commercial Client Profile</span>
           </div>
         </div>
 

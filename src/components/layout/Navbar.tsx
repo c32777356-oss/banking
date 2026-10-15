@@ -1,9 +1,19 @@
 import React, { useState } from 'react';
-import { ArrowDownLeft, Building2, ChevronDown, LogOut, RefreshCw, Send, Shield, User } from 'lucide-react';
+import {
+  ArrowDownLeft,
+  Building2,
+  ChevronDown,
+  LogOut,
+  RefreshCw,
+  Send,
+  Shield,
+  Sliders,
+  User,
+} from 'lucide-react';
 import { useBanking } from '../../context/BankingContext';
 import { DEMO_PERSONAS } from '../../data/mockData';
 
-export type NavTab = 'dashboard' | 'profile';
+export type NavTab = 'dashboard' | 'profile' | 'admin';
 
 interface NavbarProps {
   currentTab: NavTab;
@@ -24,7 +34,7 @@ export const Navbar: React.FC<NavbarProps> = ({
   return (
     <header className="sticky top-0 z-40 w-full border-b border-slate-200 bg-white/95 backdrop-blur-md shadow-xs">
       <div className="max-w-7xl mx-auto px-3 sm:px-6 lg:px-8 h-14 sm:h-16 flex items-center justify-between gap-3 sm:gap-8">
-        {/* Zone 1: Single text element wordmark with banking emblem */}
+        {/* Zone 1: Brand Wordmark with banking emblem */}
         <div
           onClick={() => onSelectTab('dashboard')}
           className="flex items-center gap-2.5 sm:gap-3 shrink-0 cursor-pointer"
@@ -82,6 +92,18 @@ export const Navbar: React.FC<NavbarProps> = ({
             <User className="w-3.5 h-3.5" />
             <span>Account Owner</span>
           </button>
+
+          <button
+            onClick={() => onSelectTab('admin')}
+            className={`flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold rounded-lg transition-all whitespace-nowrap ${
+              currentTab === 'admin'
+                ? 'bg-indigo-50 text-indigo-700 border border-indigo-200 shadow-xs font-bold'
+                : 'text-slate-500 hover:text-slate-900 hover:bg-slate-100/80'
+            }`}
+          >
+            <Sliders className="w-3.5 h-3.5 text-indigo-600" />
+            <span>Admin Console</span>
+          </button>
         </nav>
 
         {/* Zone 3: Primary action + Profile lockup */}
@@ -127,7 +149,7 @@ export const Navbar: React.FC<NavbarProps> = ({
                     <p className="text-[11px] text-slate-500 truncate font-mono">{user?.email}</p>
                     <div className="mt-1 flex items-center gap-1.5 text-[10px] text-blue-700 font-medium">
                       <Shield className="w-3 h-3 text-blue-600" />
-                      <span>256-bit Encrypted Session Active</span>
+                      <span>Verified Client Session</span>
                     </div>
                   </div>
 
@@ -142,40 +164,18 @@ export const Navbar: React.FC<NavbarProps> = ({
                     <span>View Account Owner Profile</span>
                   </button>
 
-                  <div className="px-2 py-1.5 text-[11px] font-semibold text-slate-400 uppercase tracking-wider mt-1">
-                    Switch Demo Persona
-                  </div>
-                  {DEMO_PERSONAS.map((p, idx) => (
-                    <button
-                      key={p.user.id}
-                      onClick={() => {
-                        loginAsPersona(idx);
-                        setIsProfileOpen(false);
-                      }}
-                      className="w-full text-left px-3 py-2 rounded-lg text-slate-700 hover:bg-blue-50 hover:text-blue-900 flex items-center justify-between transition-colors min-h-[38px]"
-                    >
-                      <div className="truncate">
-                        <p className="font-semibold text-slate-900 text-xs">{p.user.name}</p>
-                        <p className="text-[10px] text-slate-500 truncate">{p.user.company}</p>
-                      </div>
-                      {user?.id === p.user.id && (
-                        <span className="text-[10px] text-blue-600 font-mono font-bold bg-blue-50 px-1.5 py-0.5 rounded border border-blue-200">Active</span>
-                      )}
-                    </button>
-                  ))}
-
-                  <div className="my-2 border-t border-slate-100" />
-
                   <button
                     onClick={() => {
-                      resetToDemoData();
+                      onSelectTab('admin');
                       setIsProfileOpen(false);
                     }}
-                    className="w-full text-left px-3 py-2 rounded-lg text-slate-600 hover:bg-slate-100 hover:text-slate-900 flex items-center gap-2 transition-colors min-h-[38px]"
+                    className="w-full text-left px-3 py-2 rounded-lg text-indigo-700 hover:bg-indigo-50 flex items-center gap-2 transition-colors min-h-[38px] font-semibold"
                   >
-                    <RefreshCw className="w-4 h-4 text-slate-400" />
-                    <span>Restore Initial Ledger State</span>
+                    <Sliders className="w-4 h-4 text-indigo-600" />
+                    <span>Open Admin Management Panel</span>
                   </button>
+
+                  <div className="my-1.5 border-t border-slate-100" />
 
                   <button
                     onClick={() => {
@@ -185,7 +185,7 @@ export const Navbar: React.FC<NavbarProps> = ({
                     className="w-full text-left px-3 py-2 rounded-lg text-red-600 hover:bg-red-50 flex items-center gap-2 transition-colors min-h-[38px] font-semibold"
                   >
                     <LogOut className="w-4 h-4 text-red-500" />
-                    <span>Sign Out of Portal</span>
+                    <span>Sign Out</span>
                   </button>
                 </div>
               </>

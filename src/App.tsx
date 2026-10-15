@@ -1,4 +1,5 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
+import { AdminPanel } from './components/admin/AdminPanel';
 import { AuthModal } from './components/auth/AuthModal';
 import { OverviewView } from './components/dashboard/OverviewView';
 import { BottomNav } from './components/layout/BottomNav';
@@ -8,8 +9,17 @@ import { ProfileView } from './components/profile/ProfileView';
 import { BankingProvider, useBanking } from './context/BankingContext';
 
 const BankingAppContent: React.FC = () => {
-  const { user } = useBanking();
-  const [currentTab, setCurrentTab] = useState<NavTab>('dashboard');
+  const { user, isAdminMode } = useBanking();
+  const [currentTab, setCurrentTab] = useState<NavTab>(() => {
+    return user?.id === 'usr_admin' || isAdminMode ? 'admin' : 'dashboard';
+  });
+
+  useEffect(() => {
+    if (user?.id === 'usr_admin' || isAdminMode) {
+      setCurrentTab('admin');
+    }
+  }, [user, isAdminMode]);
+
   const [serviceProviderModal, setServiceProviderModal] = useState<{
     isOpen: boolean;
     actionType: 'deposit' | 'transfer' | null;
@@ -63,7 +73,13 @@ const BankingAppContent: React.FC = () => {
           />
         )}
 
-        {currentTab === 'profile' && <ProfileView />}
+        {currentTab === 'profile' && (
+          <ProfileView onNavigateToAdmin={() => setCurrentTab('admin')} />
+        )}
+
+        {currentTab === 'admin' && (
+          <AdminPanel onExit={() => setCurrentTab('dashboard')} />
+        )}
       </main>
 
       {/* Mobile Fixed Bottom Navigation Bar (Thumb Zone) */}
