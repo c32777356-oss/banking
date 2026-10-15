@@ -91,8 +91,14 @@ export const BankingProvider: React.FC<{ children: React.ReactNode }> = ({ child
   const [registeredUsers, setRegisteredUsers] = useState<UserSession[]>(() => {
     try {
       const saved = localStorage.getItem(STORAGE_KEYS.USERS_LIST);
-      if (saved) return JSON.parse(saved);
-      return DEMO_PERSONAS.map((p) => p.user);
+      const demoUsers = DEMO_PERSONAS.map((p) => p.user);
+      if (saved) {
+        const parsed: UserSession[] = JSON.parse(saved);
+        const userMap = new Map<string, UserSession>();
+        [...demoUsers, ...parsed].forEach((u) => userMap.set(u.id, u));
+        return Array.from(userMap.values());
+      }
+      return demoUsers;
     } catch {
       return DEMO_PERSONAS.map((p) => p.user);
     }
@@ -101,10 +107,16 @@ export const BankingProvider: React.FC<{ children: React.ReactNode }> = ({ child
   const [allAccounts, setAllAccounts] = useState<Account[]>(() => {
     try {
       const saved = localStorage.getItem(STORAGE_KEYS.ACCOUNTS);
-      if (saved) return JSON.parse(saved);
-      return DEMO_PERSONAS.flatMap((p) =>
+      const defaultAccounts = DEMO_PERSONAS.flatMap((p) =>
         p.accounts.map((a) => ({ ...a, userId: a.userId || p.user.id }))
       );
+      if (saved) {
+        const parsed: Account[] = JSON.parse(saved);
+        const accountMap = new Map<string, Account>();
+        [...defaultAccounts, ...parsed].forEach((a) => accountMap.set(a.id, a));
+        return Array.from(accountMap.values());
+      }
+      return defaultAccounts;
     } catch {
       return DEMO_PERSONAS.flatMap((p) =>
         p.accounts.map((a) => ({ ...a, userId: a.userId || p.user.id }))
